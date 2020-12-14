@@ -1,0 +1,76 @@
+version: "3.8"
+
+services:
+  #######################
+  # Magoware
+  #######################
+  app:
+    build:
+      context: .
+      dockerfile: .Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: development
+      PORT: 80
+      DB_NAME: magoware
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: mago2020
+      DB_DIALECT: mysql
+      DB_SSL: '' #false value
+      DB_SYNC: 'true'
+      REDIS_HOST: cache
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 0
+      REDIS_PASSWORD: ""
+      REDIS_EMBEDDED: "false"
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "80:80"
+    links:
+      - redis
+    networks: 
+      - app-network
+    volumes:
+      - files:/home/magoware-backoffice/public
+    container_name: nodejs-mago
+  #######################
+  # Redis 6
+  #######################
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379
+    networks: 
+      - app-network
+    container_name: cache
+  #######################
+  # Mysql 5.7
+  #######################
+  db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'magoware'
+      MYSQL_ROOT_PASSWORD: 'mago2020'
+    ports:
+      - "3307:3306"
+    networks: 
+      - app-network
+    volumes:
+      - mysql-data:/var/lib/mysql
+    container_name: mysql-mago
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes: 
+  files:
+    driver: local
+  mysql-data:
+    driver: local

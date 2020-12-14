@@ -1,0 +1,5 @@
+{
+  "refreshTokenLife": 1468800,
+  "accessTokenLife": 900,
+  "jwtSecret": "fddsa"
+}
