@@ -1,10 +1,8 @@
 'use strict';
 var path = require('path'),
     querystring=require('querystring'),
-    db = require(path.resolve('./config/lib/sequelize')),
-    response = require(path.resolve("./config/responses.js")),
     winston = require(path.resolve('./config/lib/winston')),
-    therequest = require('request'),
+    axios = require('axios').default,
     vod = require(path.resolve("./modules/deviceapiv2/server/controllers/vod.server.controller.js"));
 
 
@@ -21,29 +19,26 @@ function getipaddress(theip){
     return theip[3];
 }
 
-function trackobject(object_data,req, cb) {
-    const company_id = req.get("company_id") || 1;
+async function trackobject(object_data, req, cb) {
+  const company_id = req.get("company_id") || 1;
 
-    object_data.v = 1;
-    object_data.tid = req.app.locals.backendsettings[company_id].analytics_id; //analytics ID
-    object_data.ua  = req.headers["user-agent"];    //user agent
-    //object_data.cid = req.auth_obj.username;        //user ID
-    object_data.cid = req.auth_obj.username + "-" + req.auth_obj.boxid; //user ID
-    object_data.uip = req.ip.replace('::ffff:', '');    // user ip
-    object_data.sr  = req.body.screensize || null; //screen resolution
+  object_data.v = 1;
+  object_data.tid = req.app.locals.backendsettings[company_id].analytics_id; //analytics ID
+  object_data.ua = req.headers["user-agent"];    //user agent
+  //object_data.cid = req.auth_obj.username;        //user ID
+  object_data.cid = req.auth_obj.username + "-" + req.auth_obj.boxid; //user ID
+  object_data.uip = req.ip.replace('::ffff:', '');    // user ip
+  object_data.sr = req.body.screensize || null; //screen resolution
 
-    therequest.post(
-        'https://www.google-analytics.com/collect', {
-            form: object_data
-        },
-        function(err, response) {
-            if (err) { return cb(err); }
-            if (response.statusCode !== 200) {
-                return cb(new Error('Tracking failed'));
-            }
-            cb();
-        }
-    );
+  try {
+    let response = await axios.post('https://www.google-analytics.com/collect', object_data)
+    if (response.status !== 200) {
+      return cb(new Error('Tracking failed'));
+    }
+    cb();
+  } catch (error) {
+    return cb(error);
+  }
 }
 
 exports.trackevent = function(req, res) {

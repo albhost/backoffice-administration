@@ -1,19 +1,25 @@
-var fs = require('fs'),
+const fs = require('fs'),
     mkdirp = require('mkdirp'),
     path = require('path'),
     dbModel = require(path.resolve('./config/lib/sequelize')),
     response = require(path.resolve("./config/responses.js")),
-    winston = require('winston');
+    winston = require('winston'),
+    rimraf = require('rimraf');
+const {Storage} = require('@google-cloud/storage');
 
 var folder;
 
-function makeDirectory(dirName, cb){
-    if (!fs.existsSync(dirName)){
-        mkdirp(dirName, function(err){
-            cb(err);
-        })
-    } else {
-        cb()
+async function makeDirectory(dirName, cb){
+    try {
+        const exists = fs.existsSync(dirName);
+        if (!exists) {
+            await mkdirp(dirName);
+            cb();
+        } else {
+            cb();
+        }
+    } catch (e) {
+        cb(e);
     }
 }
 
@@ -178,70 +184,113 @@ function updateFile (prev_val,target_paths,delete_files,delete_on)
 }
 
 
-function uploadFile (req, res){
+function uploadFile(req, res, file) {
+    const fileName = req.files.file.name;
+    const tomodel = req.params.model;
+    const tofield = req.params.field;
+    let fileExtension = get_file_extention(fileName);
+    const companyID = req.token.company_id;
+    let uploadLinkPath;
 
-    const tempFolders = [
-        'epg'
-    ]
-    
-    /* get request and upload file informations */
-    var tomodel = req.params.model;
-    var tofield = req.params.field;
-    var existingfile = path.resolve('./public'+req.app.locals.backendsettings[req.token.company_id][tofield]);
-    var fileName= req.files.file.name;
-    var fileExtension = get_file_extention(fileName);
-    var tempPath = req.files.file.path;
+    const bucketName = req.app.locals.advanced_settings[req.token.company_id].google_cloud.bucket_name;
 
-    var tempDirPath = null;
-    var tempDirRelativePath = null;
-    if(tempFolders.indexOf(tomodel) == -1) {
-        tempDirRelativePath = '/' + req.token.company_id + '/files/' + tomodel;
-        tempDirPath = path.resolve('./public' + tempDirRelativePath);
-    }
-    else {
-        tempDirRelativePath = '/files/temp';
-        tempDirPath = path.resolve('./public' + tempDirRelativePath);
-    }
-    
-    if(fileExtension === '.apk'){
-        var uploadLinkPath = tempDirRelativePath + '/' + fileName.replace(fileExtension, '').replace(/\W/g, '')+fileExtension; //apk file allows alphanumeric characters and the underscore. append timestamp to ensure uniqueness
-    }
-    else{
-        var uploadLinkPath =  tempDirRelativePath + '/' + Date.now() + fileName.replace(fileExtension, '').replace(/[^0-9a-z]/gi, '')+fileExtension; //other file types allow only alphanumeric characters. append timestamp to ensure uniqueness
-    }
+    if (req.app.locals.advanced_settings[req.token.company_id] && req.app.locals.advanced_settings[req.token.company_id].google_cloud.storage === true) {
+        const jsonString = req.app.locals.advanced_settings[req.token.company_id].google_cloud.google_managed_key;
+        const exist = fs.existsSync(path.resolve('./google_storage_credentials.json'));
+        if (!exist) {
+            fs.writeFile(path.resolve('./google_storage_credentials.json'), jsonString, {flag: 'wx'}, err => {
+                if (err)
+                    return winston.error("Couldn't write file , failed with error: ", err);
+            })
+        }
 
-    var targetPath = path.resolve('./public' + uploadLinkPath);
+        const storage = new Storage({
+            keyFilename: (path.resolve('./google_storage_credentials.json')),
+            projectId: req.app.locals.advanced_settings[req.token.company_id].google_cloud.projectId
+        });
 
-    makeDirectory(tempDirPath, function(){
-        moveFile(tempPath, targetPath, function(err){
-            if (err)
-                res.json({err: 1, result: 'fail upload'});
-            else
+        let filename = req.files.file.path;
 
-                if(tomodel == 'settings') {
+
+        if (fileExtension === '.apk') {
+            uploadLinkPath = companyID + '/files/' + tomodel + '/' + fileName.replace(fileExtension, '').replace(/\W/g, '') + fileExtension; //apk file allows alphanumeric characters and the underscore.
+        } else if (fileExtension === '.png' || fileExtension === '.jpeg' || fileExtension === '.jpg' || fileExtension === '.bmp') {
+            uploadLinkPath = companyID + '/files/' + tomodel + '/' + Date.now() + fileName.replace(fileExtension, '').replace(/[^0-9a-z]/gi, '') + fileExtension; //other file types allow only alphanumeric characters.
+        } else if (fileExtension === '.zip') {
+            uploadLinkPath = companyID + '/files/' + tomodel + '/' + Date.now() + fileName.replace(fileExtension, '').replace(/[^0-9a-z]/gi, '') + fileExtension; //apk file allows alphanumeric characters and the underscore.
+        }
+
+        const publicUrl = `/${uploadLinkPath}`;
+
+
+        if (tomodel == 'epg') {
+            uploadLinkPath = companyID + '/files/' + tomodel + '/' + Date.now() + fileName.replace(fileExtension, '').replace(/[^0-9a-z]/gi, '') + fileExtension;
+
+            storage.bucket(bucketName).upload(filename, {
+                destination: uploadLinkPath,
+                gzip: true,
+                metadata: {
+                    cacheControl: 'public, max-age=31536000',
+                },
+            }).then(() => {
+                res.json({err: 0, result: uploadLinkPath});
+            })
+        } else {
+            res.json({err: 0, result: publicUrl});
+            storage.bucket(bucketName).upload(filename, {
+                destination: uploadLinkPath,
+                gzip: true,
+                metadata: {
+                    cacheControl: 'public, max-age=31536000',
+                },
+            })
+        }
+    } else {
+        const tempFolders = [
+            'epg'
+        ]
+        const existingfile = path.resolve('./public' + req.app.locals.backendsettings[req.token.company_id][tofield]);
+        const tempPath = req.files.file.path;
+        let tempDirPath = null;
+        let tempDirRelativePath = null;
+        if (tempFolders.indexOf(tomodel) == -1) {
+            tempDirRelativePath = '/' + req.token.company_id + '/files/' + tomodel;
+            tempDirPath = path.resolve('./public' + tempDirRelativePath);
+        } else {
+            tempDirRelativePath = '/files/temp';
+            tempDirPath = path.resolve('./public' + tempDirRelativePath);
+        }
+
+        if (fileExtension === '.apk') {
+            uploadLinkPath = tempDirRelativePath + '/' + fileName.replace(fileExtension, '').replace(/\W/g, '') + fileExtension; //apk file allows alphanumeric characters and the underscore. append timestamp to ensure uniqueness
+        } else {
+            uploadLinkPath = tempDirRelativePath + '/' + Date.now() + fileName.replace(fileExtension, '').replace(/[^0-9a-z]/gi, '') + fileExtension; //other file types allow only alphanumeric characters. append timestamp to ensure uniqueness
+        }
+
+        const targetPath = path.resolve('./public' + uploadLinkPath);
+
+        makeDirectory(tempDirPath, function () {
+            moveFile(tempPath, targetPath, function (err) {
+                if (err)
+                    res.json({err: 1, result: 'fail upload'});
+                else if (tomodel == 'settings') {
                     dbModel.models[tomodel].update(
-                        { [tofield]: uploadLinkPath},
-                        { where: {id: req.token.company_id }}
+                        {[tofield]: uploadLinkPath},
+                        {where: {id: req.token.company_id}}
                     ).then(function (update_result) {
-                        //update memory value
-                        //an if is required req.app.locals.backendsettings[1][tofield] = uploadLinkPath;
-                        //delete existing file if available
                         fs.unlink(existingfile, function (err) {
-                            //todo: do sth on error?
                         });
-                        //send response
                         res.json({err: 0, result: uploadLinkPath});
                     }).catch(function (error) {
                         winston.error("Saving file path failed with error: ", error);
                         response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
                     });
-                }
-                else {
+                } else {
                     res.json({err: 0, result: uploadLinkPath});
                 }
-
+            });
         });
-    });
+    }
 }
 
 

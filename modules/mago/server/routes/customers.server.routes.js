@@ -23,15 +23,15 @@ module.exports = function(app) {
 
     app.route('/api/customerdata/:customerDataId')
         .all(policy.Authenticate)
+        .all(customerData.dataByID)
         .get(customerData.read);
 		
     app.route('/api/customerdata/:customerDataId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(customerData.dataByID)
         .put(customerData.update)
-        .delete(customerData.delete);		
-
-    app.param('customerDataId', customerData.dataByID);
+        .delete(customerData.delete);
 
     app.route('/api/search_customer')
         .all(policy.Authenticate)

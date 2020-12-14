@@ -7,49 +7,57 @@ var path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     saas_functions = require(path.resolve('./custom_functions/saas_functions')),
-    db = require(path.resolve('./config/lib/sequelize')).models,
+    db = require(path.resolve('./config/lib/sequelize')),
     winston = require('winston'),
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    DBModel = db.channels,
-    ChannelPackages = db.packages_channels,
+    models = db.models,
+    DBModel = models.channels,
+    ChannelPackages = models.packages_channels,
     sequelize_t = require(path.resolve('./config/lib/sequelize')),
     fs = require('fs'),
-    escape = require(path.resolve('./custom_functions/escape'));
-
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 
 /**
  * custom functions
  */
-function link_channel_with_packages(channel_id,array_package_ids) {
-    var transactions_array = [];
+function link_channel_with_packages(channel_id, array_package_ids, company_id) {
+  let transactions_array = [];
 
-    return ChannelPackages.destroy({
-                where: {
-                    channel_id: channel_id,
-                    package_id: {$notIn: array_package_ids}
-                }
-            }).then(function (result) {
-                return sequelize_t.sequelize.transaction(function (t) {
-                            for (var i = 0; i < array_package_ids.length; i++) {
-                                transactions_array.push(
-                                      ChannelPackages.upsert({
-                                            channel_id: channel_id,
-                                            package_id: array_package_ids[i]
-                                        }, {transaction: t})
-                                )
-                            }
-                            return Promise.all(transactions_array, {transaction: t}); //execute transaction
-                        }).then(function (result) {
-                            return {status: true, message:'transaction executed correctly'};
-                        }).catch(function (err) {
-                            winston.error("Adding channels to packages failed with error: ", err);
-                            return {status: false, message:'error executing transaction'};
-                        })
-            }).catch(function (err) {
-                winston.error("Removing channels form packages failed with error: ", err);
-                return {status: false, message:'error deleteting existing packages'};
-            })
+  const destroy_where = (array_package_ids.length > 0) ? {
+    channel_id: channel_id,
+    company_id,
+    package_id: {[Op.notIn]: array_package_ids},
+  } : {
+    channel_id: channel_id,
+    company_id
+  };
+
+  return ChannelPackages.destroy({
+    where: destroy_where
+  }).then(function (result) {
+    return sequelize_t.sequelize.transaction(function (t) {
+      for (let i = 0; i < array_package_ids.length; i++) {
+        transactions_array.push(
+          ChannelPackages.upsert({
+            channel_id: channel_id,
+            package_id: array_package_ids[i],
+            company_id
+          }, {transaction: t})
+        )
+      }
+      return Promise.all(transactions_array, {transaction: t}); //execute transaction
+    }).then(function (result) {
+      return {status: true, message: 'transaction executed correctly'};
+    }).catch(function (err) {
+      winston.error("Adding channels to packages failed with error: ", err);
+      return {status: false, message: 'error executing transaction'};
+    })
+  }).catch(function (err) {
+    winston.error("Removing channels form packages failed with error: ", err);
+    return {status: false, message: 'error deleteting existing packages'};
+  })
 }
 
 
@@ -74,7 +82,7 @@ exports.create = function(req, res) {
                 else {
                     logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body));
 
-                    return link_channel_with_packages(result.id,array_packages_channels).then(function(t_result) {
+                    return link_channel_with_packages(result.id,array_packages_channels, req.token.company_id).then(function(t_result) {
                         if (t_result.status) {
                             res.jsonp(result);
                         }
@@ -136,7 +144,7 @@ exports.update = function(req, res) {
     delete req.body.packages_channels;
 
     if(req.channels.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body));
 
             if(deletefile) {
@@ -145,7 +153,7 @@ exports.update = function(req, res) {
                 });
             }
 
-            return link_channel_with_packages(req.body.id,array_packages_channels).then(function(t_result) {
+            return link_channel_with_packages(req.body.id,array_packages_channels, req.token.company_id).then(function(t_result) {
                 if (t_result.status) {
                     return res.jsonp(result);
                 }
@@ -172,7 +180,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.channels;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -250,13 +258,14 @@ exports.list = function(req, res) {
       final_where = {},
       query = req.query;
 
-  if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.title = {};
-    qwhere.$or.title.$like = '%'+query.q+'%';
-    qwhere.$or.channel_number = {};
-    qwhere.$or.channel_number.$like = '%'+query.q+'%';
-  }
+    if (query.q) {
+        let filters = []
+        filters.push(
+            { title: { [Op.like]: `%${query.q}%` } },
+            { channel_number: { [Op.like]: `%${query.q}%` } }
+        );
+        qwhere = { [Op.or]: filters };
+    }
 
     //start building where
     final_where.where = qwhere;
@@ -265,7 +274,7 @@ exports.list = function(req, res) {
         if(parseInt(query._start)) final_where.offset = parseInt(query._start);
         if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
     }
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
   else final_where.order = [['channel_number', 'ASC']];
 
@@ -273,9 +282,14 @@ exports.list = function(req, res) {
     if(query.isavailable === 'true') qwhere.isavailable = true;
     else if(query.isavailable === 'false') qwhere.isavailable = false;
 
+    final_where.attributes = [ 'id', 'company_id','genre_id','package_id', 'channel_number', 'epg_map_id', 'title', 'description','pin_protected', 'catchup_mode',
+        'isavailable', 'createdAt', 'updatedAt',[db.sequelize.fn("concat", req.app.locals.backendsettings[req.token.company_id].assets_url, db.sequelize.col('channels.icon_url')), 'icon_url']],
+        final_where.include = [];
+
+
     DBModel.count(final_where).then(function(totalrecord) {
 
-        final_where.include = [{model:db.genre,required:true},{model:db.packages_channels,attributes: ['package_id']}];
+        final_where.include = [{model: models.genre,required:true},{model:models.packages_channels,attributes: ['package_id']}];
 
         final_where.where.company_id = req.token.company_id; //return only records for this company
 
@@ -302,19 +316,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
+    const COMPANY_ID = req.token.company_id || 1;
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.channelId);
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
-
-  DBModel.find({
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+  DBModel.findOne({
     where: {
-      id: id
+      id: value
     },
-    include: [{model: db.genre}, {model: db.packages_channels}]
+    include: [{model: models.genre}, {model: models.packages_channels}]
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({
@@ -322,6 +338,14 @@ exports.dataByID = function(req, res, next, id) {
       });
     } else {
       req.channels = result;
+        let protocol = new RegExp('^(https?|ftp)://');
+        if (protocol.test(req.body.icon_url)) {
+            let url = req.body.icon_url;
+            let pathname = new URL(url).pathname;
+            req.body.icon_url = pathname;
+        } else {
+            req.channels.icon_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.icon_url;
+        }
       next();
       return null;
     }

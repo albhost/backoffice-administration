@@ -49,7 +49,7 @@ exports.update = function(req, res) {
     var updateData = req.packageChannel;
 
      if(req.packageChannel.company_id === req.token.company_id){
-         updateData.updateAttributes(req.body).then(function(result) {
+         updateData.update(req.body).then(function(result) {
              res.json(result);
          }).catch(function(err) {
             return res.status(400).send({
@@ -70,7 +70,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.packageChannel;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {

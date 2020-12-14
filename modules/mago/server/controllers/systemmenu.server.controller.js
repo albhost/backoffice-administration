@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.systemmenu;
-
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.systemmenu,
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -46,7 +47,7 @@ exports.update = function(req, res) {
   var updateData = req.systemmenu;
 
   if(req.systemmenu.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       res.json(result);
     }).catch(function(err) {
       winston.error("Error at updating system menu, error: ", err);
@@ -66,7 +67,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.systemmenu;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function() {
@@ -105,9 +106,9 @@ exports.list = function(req, res) {
       query = req.query;
 
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.description = {};
-    qwhere.$or.description.$like = '%'+query.q+'%';
+    qwhere = {
+      [Op.or]: { description: { [Op.like]: `%${query.q}%` } }
+    }
   }
 
   if(req.query.root === 'true') qwhere.parent_menu_code = 'root';
@@ -178,13 +179,21 @@ exports.list1 = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  DBModel.find({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.systemmenuId);
+
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+  DBModel.findOne({
     where: {
-      id: id
-    },
-    include: []
+      id: value
+    }
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({
@@ -197,7 +206,9 @@ exports.dataByID = function(req, res, next, id) {
     }
   }).catch(function(err) {
     winston.error("Error at fetching dataById at systemmenu, error: ",err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting  systemmenu data'
+      });
   });
 
 };

@@ -1,15 +1,15 @@
 'use strict';
 
 const path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-  push_msg = require(path.resolve('./custom_functions/push_messages')),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  sequelize = require(path.resolve('./config/lib/sequelize')),
-  DBModel = db.messages,
-  DBDevices = db.devices;
-var winston = require("winston");
-const escape = require(path.resolve('./custom_functions/escape'));
-
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+    push_msg = require(path.resolve('./custom_functions/push_messages')),
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.messages,
+    DBDevices = db.devices,
+    winston = require("winston"),
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 function save_messages(obj, messagein, ttl, action, callback) {
 
@@ -85,7 +85,7 @@ exports.create = function (req, res) {
     } else return res.status(400).send({message: "You did not select any device types"});
 
     if (req.body.sendtoactivedevices) where.device_active = true; //if we only want to send push msgs to active devices, add condition
-    where.appid = {in: device_types}; //filter devices by application id
+    where.appid = {[Op.in]: device_types}; //filter devices by application id
     where.company_id = req.token.company_id;
 
     DBDevices.findAll(
@@ -135,12 +135,12 @@ exports.create = function (req, res) {
  */
 
 exports.send_message_action = async function (req, res) {
-  DBDevices.find(
+  DBDevices.findOne(
     {
       where: {
         company_id: req.token.company_id || 1,
         id: req.body.deviceid,
-        appid: {$in: [1, 2, 4]}
+        appid: {[Op.in]: [1, 2, 4]}
       }
     }
   ).then(function (result) {
@@ -206,7 +206,7 @@ exports.update = function (req, res) {
   var updateData = req.messages;
 
   if (req.messages.company_id === req.token.company_id) {
-    updateData.updateAttributes(req.body).then(function (result) {
+    updateData.update(req.body).then(function (result) {
       res.json(result);
     }).catch(function (err) {
       winston.error("Updating message failed with error: ", err);
@@ -225,7 +225,7 @@ exports.update = function (req, res) {
 exports.delete = function (req, res) {
   var deleteData = req.messages;
 
-  DBModel.findById(deleteData.id).then(function (result) {
+  DBModel.findByPk(deleteData.id).then(function (result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function () {
@@ -266,7 +266,7 @@ exports.list = function (req, res) {
   final_where.where = qwhere;
   if (parseInt(query._start)) final_where.offset = parseInt(query._start);
   if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
 
   final_where.include = [];
@@ -293,13 +293,21 @@ exports.list = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
+exports.dataByID = function (req, res, next) {
 
-  DBModel.find({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.messageId);
+
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+  DBModel.findOne({
     where: {
-      id: id
-    },
-    include: []
+      id: value
+    }
   }).then(function (result) {
     if (!result) {
       return res.status(404).send({
@@ -312,7 +320,9 @@ exports.dataByID = function (req, res, next, id) {
     }
   }).catch(function (err) {
     winston.error("Getting message failed with error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting messages data'
+      });
   });
 
 };

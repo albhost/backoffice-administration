@@ -1,27 +1,26 @@
-var path = require('path'),
-    db = require(path.resolve('./config/lib/sequelize')).models,
-    request = require("request");
-var winston = require("winston");
+const path = require('path');
+const db = require(path.resolve('./config/lib/sequelize')).models;
+const winston = require('../config/lib/winston');
+const axios = require('axios').default;
 
-function send_notification(fcm_token, firebase_key, user,message, ttl, push_message, save_message, id ,  callback) {
+function send_notification(fcm_token, firebase_key, user, message, ttl, push_message, save_message, id, callback) {
     //push payload is the same inside this function call
-    if(message.data) {
+    if (message.data) {
         var is_info = (message.data.type === '1') ? true : false;
         var options = {
             url: 'https://fcm.googleapis.com/fcm/send',
             method: 'POST',
             headers: {
-                'Authorization': "key="+firebase_key,
+                'Authorization': "key=" + firebase_key,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                "to": fcm_token,
-                "data": message.data,
-                "notification": message.notification
+            data: JSON.stringify({
+                to: fcm_token,
+                data: message.data,
+                notification: message.notification
             })
         };
-    }
-    else {
+    } else {
         var is_info = (push_message && save_message) ? true : false;
         var payload = {
             "push_message": (push_message) ? "true" : "false",
@@ -36,12 +35,12 @@ function send_notification(fcm_token, firebase_key, user,message, ttl, push_mess
             "SOFTWARE_INSTALL": (!push_message && message.software_install) ? message.software_install : "",
             "DELETE_SHP": (!push_message && message.delete_shp) ? message.delete_shp : "",
             "DELETE_DATA": (!push_message && message.delete_data) ? message.delete_data : "",
-            "URL_DOWNLOAD":"",
-            "NAME":"",
-            "ACTION" : (message.action) ? message.action : "",
-            "PARAMETER1" : (message.parameter1) ? message.parameter1 : "", //param 1
-            "PARAMETER2" : (message.parameter2) ? message.parameter2 : "", //param 2
-            "PARAMETER3" : (message.parameter3) ? message.parameter3 : "" //options
+            "URL_DOWNLOAD": "",
+            "NAME": "",
+            "ACTION": (message.action) ? message.action : "",
+            "PARAMETER1": (message.parameter1) ? message.parameter1 : "", //param 1
+            "PARAMETER2": (message.parameter2) ? message.parameter2 : "", //param 2
+            "PARAMETER3": (message.parameter3) ? message.parameter3 : "" //options
         };
 
         //prepare request
@@ -49,36 +48,56 @@ function send_notification(fcm_token, firebase_key, user,message, ttl, push_mess
             url: 'https://fcm.googleapis.com/fcm/send',
             method: 'POST',
             headers: {
-                'Authorization': "key="+firebase_key,
+                'Authorization': "key=" + firebase_key,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                "to": fcm_token,
-                "data": payload
+            data: JSON.stringify({
+                to: fcm_token,
+                data: payload
             })
         };
     }
 
-    request(options, function (error, response, body) {
-        if(!error && body && is_info === true){
-            if(JSON.parse(body) && (JSON.parse(body).success === 1)){
+    axios(options).then(response => {
+        if (response.data && is_info === true) {
+            if (response.data && response.data.success === 1) {
                 var title = (!message.data) ? message.parameter1 : message.data.title;
                 var description = (!message.data) ? message.parameter2 : message.data.body;
                 exports.save_message(user, fcm_token, description, push_message, title); //save record for sent info messages
             }
         }
-        else if(!error && body && is_info === false && ((message.data.type === 'imageandtext') || (message.data.type === 'textonly') || (message.data.type === 'imageonly'))) {
-                 exports.save_banner(id, fcm_token,description, push_message, title ); //save record for sent info messages
-
+        else if (response.data && is_info === false && message.data.values !== undefined && message.data.values.activity === 'subscription_notification') {
+            exports.save_notification(user, fcm_token, message.data.body, push_message, message.data.title); //save record for sent info messages
         }
-    });
-
+        else if (response.data && is_info === false && ((message.data.type === 'imageandtext') || (message.data.type === 'textonly') || (message.data.type === 'imageonly'))) {
+            exports.save_banner(id, fcm_token, description, push_message, title); //save record for sent info messages
+        }
+    }).catch(error => {
+        winston.error("Error sending the push notification: ", error.message)
+    })
 }
 
 
 function save_message(user, googleappid, message, action, title, company_id){
 
     db.messages.create({
+        username: user,
+        googleappid: googleappid,
+        message: message,
+        action: action,
+        title: title,
+        company_id: company_id
+    }).then(function(result) {
+        winston.info('Push notifications saved');
+    }).catch(function(err) {
+        winston.error("Error at creating push notification, error: ", err);
+    });
+
+}
+
+
+function save_notification(user, googleappid, message, action, title, company_id){
+   db.notifications.create({
         username: user,
         googleappid: googleappid,
         message: message,
@@ -143,24 +162,19 @@ function SCHEDULE_PUSH(title, body, type, event, program_id, channel_number, eve
     };
 }
 
-function CUSTOM_TOAST_PUSH(title, message, type, imageGif, xOffset, yOffset, duration, link_url, activity) {
+function CUSTOM_TOAST_PUSH(title, message, type, imageUrl, duration, activity) {
     return {
         data: {
-            title   : title,
-            body    : message,
-            type    : type,
-            values  : {
-                imageGif : imageGif,
-                xOffset  : xOffset,
-                yOffset  : yOffset,
-                duration : duration,
-                link_url : link_url,
-                activity : activity
-            }
+            title: title,
+            body: message,
+            type: type,
+            imageurl: imageUrl,
+            duration: duration,
+            activity: activity
         },
         notification: {
-            title   : title,
-            body    : message
+            title: title,
+            body: message
         }
     };
 }
@@ -206,6 +220,7 @@ function ACTION_PUSH(title, body, type, action, parameters) {
 exports.send_notification = send_notification;
 exports.save_message = save_message;
 exports.save_banner = save_banner;
+exports.save_notification = save_notification;
 exports.INFO_PUSH = INFO_PUSH;
 exports.SCHEDULE_PUSH = SCHEDULE_PUSH;
 exports.CUSTOM_TOAST_PUSH = CUSTOM_TOAST_PUSH;

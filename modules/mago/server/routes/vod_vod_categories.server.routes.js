@@ -22,12 +22,10 @@ module.exports = function(app) {
     app.route('/api/packagechannels/:packageChannelId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vod_vod_categories.dataByID)
         .get(vod_vod_categories.read)
         .put(vod_vod_categories.update)
         .delete(vod_vod_categories.delete);
-
-    app.param('packageChannelId', vod_vod_categories.dataByID);
-
 
 };
 

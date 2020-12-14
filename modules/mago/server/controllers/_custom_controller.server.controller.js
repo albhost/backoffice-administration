@@ -66,7 +66,7 @@ exports.list_logins_with_customer = function(req,res) {
         ],
         where: {company_id: req.token.company_id},
         limit: 100,
-        order: 'id desc',
+        order: [['id', 'DESC']],
         raw: true
     }
     ).then(function(results) {

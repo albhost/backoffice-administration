@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    DBModel = db.groups;
-
+    DBModel = db.groups,
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -44,7 +45,7 @@ exports.update = function(req, res) {
     var updateData = req.users;
 
     if( (req.users.company_id === req.token.company_id) || (req.token.company_id === -1) ){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Updating group failed with error: ", err);
@@ -64,7 +65,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.users;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if ( (result && (result.company_id === req.token.company_id) ) || (req.token.company_id === -1) ) {
                 result.destroy().then(function() {
@@ -105,12 +106,11 @@ exports.list = function(req, res) {
   const where = {company_id: req.token.company_id};
 
   if (query.filter_reserved_groups === 'true') {
-    where.code = {$notIn: ['superadmin', 'admin']}
+    where.code = {[Op.notIn]: ['superadmin', 'admin']}
   }
 
   DBModel.findAndCountAll({
-    where: where,
-    include: []
+    where: where
   }).then(function (results) {
     if (!results) {
       return res.status(404).send({
@@ -130,19 +130,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.groupId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({
@@ -155,7 +157,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Getting group data failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting groups data'
+        });
     });
 
 };

@@ -18,11 +18,9 @@ module.exports = function(app) {
     app.route('/api/tv_episode_subtitles/:tv_episode_subtitle_id')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(tv_episodeSubtitles.dataByID)
         .get(tv_episodeSubtitles.read)
         .put(tv_episodeSubtitles.update)
         .delete(tv_episodeSubtitles.delete);
-
-    app.param('tv_episode_subtitle_id', tv_episodeSubtitles.dataByID);
-
 
 };

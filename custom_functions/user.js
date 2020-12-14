@@ -23,7 +23,7 @@ exports.sendInvite = function(req, user, useRootMail) {
                     pass: req.app.locals.backendsettings[mailSettings].email_password
                 }
             }
-            let link = 'http://' + req.headers.host + '/api/auth/tokenvalidate/' + token;
+            let link = 'https://' + req.headers.host + '/api/auth/tokenvalidate/' + token;
             var smtpTransport = nodemailer.createTransport(smtpConfig);
             db.email_templates.findOne({
                 attibutes: ['content'],

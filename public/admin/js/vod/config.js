@@ -35,7 +35,8 @@ export default function (nga, admin) {
             nga.field('vod_vod_categories','reference_many')
                 .targetEntity(admin.getEntity('VodCategories'))
                 .targetField(nga.field('name'))
-                .singleApiCall(function (category_id) {
+              .perPage(-1)
+              .singleApiCall(function (category_id) {
                     return { 'category_id[]': category_id };
                 }).label('Genres'),
             nga.field('package_vods')
@@ -362,6 +363,7 @@ export default function (nga, admin) {
                 .targetEntity(admin.getEntity('VodCategories'))
                 .targetField(nga.field('name'))
                 .label('Genres')
+                .perPage(-1)
                 .attributes({ placeholder: 'Select genre' })
                 .map(function getpckgid(value, entry) {
                     var return_object = [];
@@ -369,6 +371,10 @@ export default function (nga, admin) {
                         return_object[i] = value[i].category_id;
                     }
                     return return_object;
+                })
+                .remoteComplete(true, {
+                    refreshDelay: 300,
+                    searchQuery: function(search) { return { q: search }; }
                 })
                 .singleApiCall(function (category_id) {
                     return { 'category_id[]': category_id };

@@ -3,10 +3,7 @@
 var path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    async = require('async'),
-    fs = require('fs'),
     moment = require('moment'),
-    dateFormat = require('dateformat'),
     DBModel = db.epg_data,
     winston = require(path.resolve('./config/lib/winston'));
 

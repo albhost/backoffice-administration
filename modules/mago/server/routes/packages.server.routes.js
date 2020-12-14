@@ -22,6 +22,7 @@ module.exports = function(app) {
     app.route('/api/packages/:packageId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(packages.dataByID)
         .get(packages.read)
         .put(packages.update)
         .delete(packages.delete);
@@ -35,6 +36,7 @@ module.exports = function(app) {
     app.route('/api/vodpackages/:packageId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(packages.dataByID)
         .get(packages.read)
         .put(packages.update)
         .delete(packages.delete);
@@ -48,10 +50,9 @@ module.exports = function(app) {
     app.route('/api/livepackages/:packageId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(packages.dataByID)
         .get(packages.read)
         .put(packages.update)
         .delete(packages.delete);
-
-    app.param('packageId', packages.dataByID);
 
 };

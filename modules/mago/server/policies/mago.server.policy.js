@@ -144,7 +144,6 @@ exports.Authenticate = function(req, res, next) {
 // function to verify API KEY for third party integrations.
 
 exports.isApiKeyAllowed = function(req, res, next) {
-
     let apikey = req.query.apikey;
     if (apikey == '') {
         res.status(403).json({message: 'API key not authorized'});
@@ -159,6 +158,16 @@ exports.isApiKeyAllowed = function(req, res, next) {
         include: [{model: db.groups}]
     }).then(function(result) {
         if(result) {
+            let config = req.app.locals.advanced_settings[result.company_id].public_api.auth;
+
+            let ip = req.header('x-forwarded-for') || req.connection.remoteAddress;
+            ip = ip.replace('::ffff:', '');
+            
+            if (config.ip_whitelist.length > 0 && config.ip_whitelist.indexOf(ip) == -1) {
+                res.status(403).send({error: {code: 403, message: 'IP not allowed to access public api'}});
+                return;
+            }
+
             req.token = {
                 id: result.id,
                 company_id: result.company_id,

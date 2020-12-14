@@ -3,15 +3,16 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     saas_functions = require(path.resolve('./custom_functions/saas_functions')),
     winston = require('winston'),
     authenticationHandler = require(path.resolve('./modules/deviceapiv2/server/controllers/authentication.server.controller')),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.login_data;
-
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.login_data,
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * @api {post} /api/logindata Create User account
  * @apiVersion 0.2.0
@@ -113,7 +114,7 @@ exports.update = function(req, res) {
     var updateData = req.loginData;
 
   if(req.body.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body), req.token.company_id);
       res.json(result);
       return null;
@@ -136,7 +137,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.loginData;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function() {
@@ -180,9 +181,9 @@ exports.list = function(req, res) {
   //search client account by username
   if (query.username) qwhere.username = query.username; //full text search
   else if (query.q) {
-    qwhere.$or = {};
-    qwhere.$or.username = {};
-    qwhere.$or.username.$like = '%' + query.q + '%'; //partial search
+    qwhere = Object.assign(qwhere, {
+      [Op.or]: { username: { [Op.like]: `%${query.q}%` } }
+    })
   }
 
   //start building where
@@ -244,12 +245,21 @@ exports.latest = function(req, res) {
  * middleware
  */
 exports.dataByID = function (req, res) {
-  const id = req.params.loginDataId;
-  const company_id = req.token.company_id || 1;
+
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.loginDataId);
+
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+    const company_id = req.token.company_id || 1;
 
   DBModel.findOne({
     where: {
-      id: id,
+      id: value,
       company_id: company_id
     },
     include: [{model: db.customer_data}]

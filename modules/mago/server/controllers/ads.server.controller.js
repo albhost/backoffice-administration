@@ -5,9 +5,8 @@ var path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.commands,
     DBDevices = db.devices;
-    var moment = require('moment');
-var dateformat = require('dateformat');
-
+var moment = require('moment');
+const  { Op } = require('sequelize');
 /**
  * @api {post} /api/ads Push messages - Send ads
  * @apiVersion 0.2.0
@@ -46,70 +45,60 @@ var dateformat = require('dateformat');
 
  */
 
-exports.create = function(req, res) {
-    var title = (req.body.title) ? req.body.title : "";
-    var message = (req.body.message) ? req.body.message : "";
-    var yOffset = 1;
-    var duration = (req.body.duration) ? req.body.duration.toString() : "5000"; //default value 5000ms
-    var link_url = (req.body.link_url) ? req.body.link_url : "";
-    var imageGif = (req.body.imageGif) ? req.body.imageGif : "";
-    var type = (req.body.type) ? req.body.type : 'textonly';
-    var delivery_time = (!req.body.delivery_time) ? 0 : moment(req.body.delivery_time).format('x') - moment(Date.now()).format('x');
-    if(req.body.xOffset) var xOffset =  req.body.xOffset;
-    else return res.status(400).send({ message: "You did not select a position to display the ad" });
-
-    if(req.body.activity) {
-        var activity = "";
-        for(var i=0; i<req.body.activity.length; i++) activity = (i<req.body.activity.length-1) ? (activity+req.body.activity[i]+",") : (activity+req.body.activity[i]);
-        if(activity.search("all") !== -1) activity = "all"; //"all" overules other activities
+exports.create = function (req, res) {
+    const title = (req.body.title) ? req.body.title : "";
+    const message = (req.body.message) ? req.body.message : "";
+    const duration = (req.body.duration) ? req.body.duration.toString() : "5000"; //default value 5000ms
+    const imageUrl = (req.body.image_url) ? req.body.image_url : null;
+    const type = (req.body.type) ? req.body.type : 'textonly';
+    const delivery_time = (!req.body.delivery_time) ? 0 : moment(req.body.delivery_time).format('x') - moment(Date.now()).format('x');
+    let activity = "";
+    if (req.body.activity) {
+        for (let i = 0; i < req.body.activity.length; i++) activity = (i < req.body.activity.length - 1) ? (activity + req.body.activity[i] + ",") : (activity + req.body.activity[i]);
+        if (activity.search("all") !== -1) activity = "all"; //"all" overules other activities
     }
+    let device_types = [];
 
     if (req.body.appid && req.body.appid.length > 0) {
-        var device_types = [];
-        for(var j=0; j<req.body.appid.length; j++) device_types.push(parseInt(req.body.appid[j]));
-    }
-    else return res.status(400).send({ message: "You did not select any device types" });
+        for (let j = 0; j < req.body.appid.length; j++) device_types.push(parseInt(req.body.appid[j]));
+    } else return res.status(400).send({message: "You did not select any device types"});
 
-    /*if(!req.body.imageGif) res.status(400).send({ message: "You have to add an image link for the ad" });
-    else var imageGif = req.body.imageGif;*/
 
-    var no_users = !!(req.body.all_users !== true && req.body.username === null); //no users selected, don't send push
-    var no_device_type = !!(!device_types || device_types.length < 1); //no device types selected, don't send push
-    if(no_users || no_device_type){
+    const no_users = !!(req.body.all_users !== true && req.body.username === null); //no users selected, don't send push
+    const no_device_type = !!(!device_types || device_types.length < 1); //no device types selected, don't send push
+    if (no_users || no_device_type) {
         return res.status(400).send({
             message: 'You did not select any devices'
         });
-    }
-    else if(activity.length < 1){
+    } else if (activity.length < 1) {
         return res.status(400).send({
             message: 'You must select where the ads should appear'
         });
-    }
-    else{
-        var where = {}; //the device filters will be passed here
-        if(req.body.all_users !== true) where.login_data_id = req.body.username; //if only one user is selected, filter devices of that user
-        where.appid = {in: device_types};
+    } else {
+        let where = {}; //the device filters will be passed here
+        if (req.body.all_users !== true) where.login_data_id = req.body.username; //if only one user is selected, filter devices of that user
+        where.appid = {[Op.in]: device_types};
         where.device_active = true;  //ads only sent to logged users
 
-        setTimeout(function(){
-            send_ad(where, title, message,  imageGif, xOffset, yOffset, duration, link_url, activity, req.app.locals.backendsettings[req.token.company_id].firebase_key, res, type);
+        setTimeout(function () {
+            send_ad(where, title, message, imageUrl, duration, activity, req.app.locals.backendsettings[req.token.company_id].firebase_key, res, type);
         }, delivery_time);
 
         return res.status(200).send({
-            message: 'The ad will be sent in '+moment(req.body.delivery_time).format("YYYY-MM-DD HH:mm:ss")
+            message: 'The ad will be sent in ' + moment(req.body.delivery_time).format("YYYY-MM-DD HH:mm:ss")
         });
     }
 };
 
 //returns list of commands stored in the database, for the listView
-exports.list = function(req, res) {
+exports.list = function (req, res) {
     var query = {};
     var where = {};
     var join_where = {};
 
-    if(req.query.status) where.status = req.query.status;
-    if(req.query.command) where.command = {like: '%'+req.query.command+'%'};
-    if(req.query.username) join_where.username = {like: '%'+req.query.username+'%'};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.command) where.command = {[Op.like]: '%' + req.query.command + '%'};
+    if (req.query.username) join_where.username = {[Op.like]: '%' + req.query.username + '%'};
 
     query.attributes = ['id', 'googleappid', 'command', 'status', 'createdAt'];
     query.include = [{model: db.login_data, attributes: ['username'], required: true, where: join_where}];
@@ -117,7 +106,7 @@ exports.list = function(req, res) {
     query.where = where;
     query.where.company_id = req.token.company_id; //return only records for this company
 
-    DBModel.findAndCountAll(query).then(function(results) {
+    DBModel.findAndCountAll(query).then(function (results) {
         if (!results) {
             return res.status(404).send({
                 message: 'No data found'
@@ -126,32 +115,34 @@ exports.list = function(req, res) {
             res.setHeader("X-Total-Count", results.count);
             res.json(results.rows);
         }
-    }).catch(function(err) {
+    }).catch(function (err) {
         winston.error("Getting the list of ads sent failed with error: ", err);
         res.jsonp(err);
     });
 };
 
-function send_ad(where, title, message,  imageGif, xOffset, yOffset, duration, link_url, activity, firebase_key, res, type){
+function send_ad(where, title, message, imageUrl, duration, activity, firebase_key, res, type) {
 
     DBDevices.findAll(
         {
             attributes: ['googleappid', 'app_version', 'appid', 'login_data_id'],
             where: where,
-            include: [{model: db.login_data, attributes: ['username', 'id'], required: true, raw: true, where: {get_messages: true}}]
+            include: [{
+                model: db.login_data,
+                attributes: ['username', 'id'],
+                required: true,
+                raw: true,
+                where: {get_messages: true}
+            }]
         }
-    ).then(function(devices) {
+    ).then(function (devices) {
         if (!(!devices || devices.length === 0)) {
-            var fcm_tokens = [];
-            var users = [];
-            for(var i=0; i<devices.length; i++){
-                var push_object = new push_msg.CUSTOM_TOAST_PUSH(title, message, type, imageGif, xOffset, yOffset, duration, link_url, activity);
-                push_msg.send_notification(devices[i].googleappid, firebase_key, devices[i].login_datum.dataValues.username, push_object, 5, true, true, devices[i].login_datum.dataValues.id ,function(devices) {
+            for (let i = 0; i < devices.length; i++) {
+                const push_object = new push_msg.CUSTOM_TOAST_PUSH(title, message, type, imageUrl, duration, activity);
+                push_msg.send_notification(devices[i].googleappid, firebase_key, devices[i].login_datum.dataValues.username, push_object, 5, true, true, devices[i].login_datum.dataValues.id, function (devices) {
                     console.log("We are here at ad callback", devices)
                 });
             }
         }
-
-
     });
 }

@@ -34,7 +34,7 @@ var TokenGenerator = function () {
         this._session_id = config.session ? config.session : '';
         this._data = config.data ? config.data : '';
         this._salt = config.salt ? config.salt : '';
-        this._key = config.key ? config.key : 'aabbccddeeff00112233445566778899';
+        this._key = config.key ? config.key : '';
         this._field_delimiter = config.delimiter ? config.delimiter : '~';
         this._early_user_encoding = config.escape_early ? config.escape_early : false;
     }

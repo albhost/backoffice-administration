@@ -88,9 +88,11 @@ export default function (nga, admin) {
                     { value: 4, label: 'Android Smart TV' },
                     { value: 5, label: 'Samsung Smart TV' },
                     { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
+                  {value: 7, label: 'Web Smart TV'},
+                  {value: 8, label: 'Web App'},
+                    {value: 9, label: 'Roku TV'}
                 ])
-                .defaultValue([1,2,3,4,5,6])
+                .defaultValue([1,2,3,4,5,6,7,8,9])
                 .validation({validator: function(value) {
                     if(value === null || value === ''){
                         throw new Error('Please Select Stream resolution');

@@ -17,8 +17,9 @@ const path = require('path'),
     config = require(path.resolve('./config/config')),
     DBModel = db.users,
     sendEmail = require(path.resolve('./custom_functions/sendEmail')),
-    userController = require('./users.server.controller');
-
+    userController = require('./users.server.controller'),
+    getClientIP = require(path.resolve("./custom_functions/getClientIP"));
+const { Op } = require('sequelize');
 
 
 /**
@@ -54,6 +55,9 @@ exports.authenticate = function (req, res) {
                 });
             } else {
 
+                let ip = getClientIP(req);
+                ip = ip.replace('::ffff:', '')
+
                 if (!result.authenticate(authBody.password)) {
                     return res.status(401).send({
                         message: 'Username or Password does not match'
@@ -80,7 +84,7 @@ exports.authenticate = function (req, res) {
                         uid: result.id,
                         role: group
                     }, process.env.JWT_SECRET, {
-                        expiresIn: "4h"
+                        expiresIn: "24h"
                     });
 
                 req.token = jwt.verify(token, process.env.JWT_SECRET);
@@ -93,7 +97,6 @@ exports.authenticate = function (req, res) {
                         for (var i = 0; i < data.length; i++) {
                             const userData = {
                                 email: data[i].email
-
                             };
 
                             const smtpConfig = {
@@ -106,7 +109,6 @@ exports.authenticate = function (req, res) {
                                 }
                             };
 
-                            // var ip = req.ip.replace('::ffff:', '');
 
                             const htmlBody = `User: ${req.body.username} has logged in. <br> Browser Info: ${req.headers['user-agent']} <br> Time: ${new Date().toISOString()}  <br> City: ${req.geoip.city} <br> Country: ${req.geoip.country} <br> IP Address: ${ip} <br> Server URL: ${req.headers['origin']}`;
                             const mailOptions = {
@@ -132,12 +134,6 @@ exports.authenticate = function (req, res) {
                     })
                 }
 
-                else {
-                    console.log('User is Admin');
-                }
-
-
-                let ip = req.ip.replace('::ffff:', '');
                 return db.users.update({last_login_ip: ip }, {where: {id: result.id}})
                     .then(function () {
                         //Wait for the user's menu object to be prepared. Once finished, return the object or the error (respectively)
@@ -161,7 +157,7 @@ exports.authenticate = function (req, res) {
         }
     ).catch(function (err) {
         winston.error("Finding the user failed with error: ", err);
-        res.jsonp(err);
+        res.json(err);
     });
 };
 
@@ -224,7 +220,7 @@ exports.authenticateV2 = function (req, res) {
                     uid: result.id,
                     role: group
                 }, process.env.JWT_SECRET, {
-                    expiresIn: "4h"
+                    expiresIn: "24h"
                 });
 
               req.token = jwt.verify(token, process.env.JWT_SECRET);
@@ -379,7 +375,7 @@ exports.issueJWT = function (userid, username, group, company_id) {
             uid: userid,
             role: group
         }, process.env.JWT_SECRET, {
-            expiresIn: "4h"
+            expiresIn: "24h"
         });
 
     return token;
@@ -413,7 +409,7 @@ exports.update_personal_details = function (req, res) {
     }).then(function (result) {
 
         if (result) {
-            result.updateAttributes(req.body)
+            result.update(req.body)
                 .then(function (result) {
                     res.json(result);
                 })
@@ -448,7 +444,7 @@ exports.changepassword1 = function (req, res, next) {
 
     if (req.token) {
         if (passwordDetails.newPassword) {
-            DBModel.findById(req.token.id).then(function (user) {
+            DBModel.findByPk(req.token.id).then(function (user) {
                 if (user) {
                     if (user.company_id === req.token.company_id) {
                         if (user.authenticate(passwordDetails.currentPassword)) {
@@ -513,7 +509,7 @@ exports.forgot = function (req, res, next) {
                 var user_data;
                 if (req.body.username) user_data = {username: req.body.username.toLowerCase()};
                 else if (req.body.email) user_data = {email: req.body.email.toLowerCase()};
-                DBModel.find({
+                DBModel.findOne({
                     where: user_data
                 }).then(function (user) {
                     //the user was not found. Either the username or email was incorrect
@@ -565,7 +561,7 @@ exports.forgot = function (req, res, next) {
         function (emailHTML, saved, done) { // Send reset email
             var mailOptions = {
                 to: saved.email,
-                from: req.app.locals.backendsettings.email_address,
+                from: req.app.locals.backendsettings[saved.company_id].email_address,
                 subject: 'Password Reset',
                 html: emailHTML
             };
@@ -589,7 +585,7 @@ exports.forgot = function (req, res, next) {
 exports.renderPasswordForm = function (req, res) {
     DBModel.findOne({
         attributes: ['id'],
-        where: {resetpasswordtoken: req.params.token, resetpasswordexpires: {$gte: Date.now()}} //token is the identifier for this action, expired tokens are invalid identifiers
+        where: {resetpasswordtoken: req.params.token, resetpasswordexpires: {[Op.gte]: Date.now()}} //token is the identifier for this action, expired tokens are invalid identifiers
     }).then(function (found_user) {
         if (found_user) {
             res.render(path.resolve('modules/mago/server/templates/reset-password-enter-password'), {token: req.params.token}, function (err, html) {
@@ -610,7 +606,7 @@ exports.renderPasswordForm = function (req, res) {
 exports.resetPassword = function (req, res) {
 
     DBModel.findOne({
-        attributes: ['id', 'invite_pending'], where: { resetpasswordtoken: req.params.token, resetpasswordexpires: { $gte: Date.now() } } //token is the identifier for this action, expired tokens are invalid identifiers
+        attributes: ['id', 'invite_pending'], where: { resetpasswordtoken: req.params.token, resetpasswordexpires: { [Op.gte]: Date.now() } } //token is the identifier for this action, expired tokens are invalid identifiers
     }).then(function (found_user) {
         if (!found_user || !found_user.id) {
             res.send({ message: "The link to reset your password is not valid. Please re-make the request for a reset link" });

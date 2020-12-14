@@ -4,9 +4,8 @@ var winston = require("winston");
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-    subscription_functions = require(path.resolve('./custom_functions/sales.js')),
     db = require(path.resolve('./config/lib/sequelize')).models,
     sequelizes = require(path.resolve('./config/lib/sequelize')),
     sequelize = require('sequelize'),
@@ -14,13 +13,12 @@ var path = require('path'),
     moment = require('moment'),
     async = require('async'),
     fs = require('fs'),
-    ejs = require('ejs'),
-    pdf = require('html-pdf'),
+    handlebars = require('handlebars'),
     DBModel = db.salesreport,
-    phantomjs = require('phantomjs'),
-    eventSystem = require(path.resolve("./config/lib/event_system.js")),
-    escape = require(path.resolve('./custom_functions/escape'));
-
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const puppeteer = require('puppeteer');
+const  { Op } = require('sequelize');
 /**
  * Create
  */
@@ -53,7 +51,7 @@ exports.read = function (req, res) {
 exports.update = function (req, res) {
     var updateData = req.salesReport;
     req.body.company_id = req.token.company_id;
-    updateData.updateAttributes(req.body).then(function (result) {
+    updateData.update(req.body).then(function (result) {
         res.status(200).send(result)
         return null;
     }).catch(function (err) {
@@ -289,27 +287,27 @@ exports.list = function (req, res) {
         query = req.query;
     final_where.where = qwhere; //start building where
 
-    if (req.query.user_username) final_where.where.user_username = {like: '%' + req.query.user_username + '%'};
+    if (req.query.user_username) final_where.where.user_username = {[Op.like]: '%' + req.query.user_username + '%'};
     if (query.login_data_id) final_where.where.login_data_id = query.login_data_id;
     if (req.query.name) final_where.where.combo_id = req.query.name;
-    var distributor_filter = (req.query.distributorname) ? {like: '%' + req.query.distributorname + '%'} : {like: '%%'};
+    var distributor_filter = (req.query.distributorname) ? {[Op.like]: '%' + req.query.distributorname + '%'} : {[Op.like]: '%%'};
 
     if (req.query.active === 'active') final_where.where.active = true;
     if (req.query.active === 'cancelled') final_where.where.active = false;
 
-    if (req.query.startsaledate) final_where.where.saledate = {gte: req.query.startsaledate};
-    if (req.query.endsaledate) final_where.where.saledate = {lte: req.query.endsaledate};
+    if (req.query.startsaledate) final_where.where.saledate = {[Op.gte]: req.query.startsaledate};
+    if (req.query.endsaledate) final_where.where.saledate = {[Op.lte]: req.query.endsaledate};
 
     if ((req.query.startsaledate) && (req.query.endsaledate)) final_where.where.saledate = {
-        gte: req.query.startsaledate,
-        lte: req.query.endsaledate
+        [Op.gte]: req.query.startsaledate,
+        [Op.lte]: req.query.endsaledate
     };
 
     //fetch records for specified page
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
 
-    if (query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir); //sort by specified field and specified order
+    if (query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]]; //sort by specified field and specified order
     else final_where.order = [['saledate', 'DESC']];
 
     final_where.include = [
@@ -346,7 +344,7 @@ exports.list = function (req, res) {
 
     }).catch(function (err) {
         winston.error("Getting sale list failed with error: ", err);
-        res.jsonp(err);
+        res.json(err);
     });
 
 };
@@ -361,19 +359,19 @@ exports.sales_by_product = function (req, res) {
     if (req.query.active === 'active') final_where.where.active = true;
     if (req.query.active === 'cancelled') final_where.where.active = false;
 
-    if (req.query.startsaledate) final_where.where.saledate = {gte: req.query.startsaledate};
-    if (req.query.endsaledate) final_where.where.saledate = {lte: req.query.endsaledate};
+    if (req.query.startsaledate) final_where.where.saledate = {[Op.gte]: req.query.startsaledate};
+    if (req.query.endsaledate) final_where.where.saledate = {[Op.lte]: req.query.endsaledate};
 
     if ((req.query.startsaledate) && (req.query.endsaledate)) final_where.where.saledate = {
-        gte: req.query.startsaledate,
-        lt: req.query.endsaledate
+        [Op.gte]: req.query.startsaledate,
+        [Op.lt]: req.query.endsaledate
     };
 
     //fetch records for specified page
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
 
-    if (query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir); //sort by specified field and specified order
+    if (query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]]; //sort by specified field and specified order
 
     final_where.attributes = ['id', 'combo_id', [sequelize.fn('max', sequelize.col('saledate')), 'saledate'], 'createdAt', [sequelize.fn('count', sequelize.col('salesreport.id')), 'count']];
     final_where.include = [{model: db.combo, required: true, attributes: ['name', 'duration', 'value']}];
@@ -407,21 +405,21 @@ exports.sales_by_date = function (req, res) {
         query = req.query;
     final_where.where = qwhere; //start building where
 
-    if (req.query.user_username) final_where.where.user_username = {like: '%' + req.query.user_username + '%'};
+    if (req.query.user_username) final_where.where.user_username = {[Op.like]: '%' + req.query.user_username + '%'};
     if (query.login_data_id) final_where.where.login_data_id = query.login_data_id;
-    if (req.query.distributorname) final_where.where.distributorname = {like: '%' + req.query.distributorname + '%'};
+    if (req.query.distributorname) final_where.where.distributorname = {[Op.like]: '%' + req.query.distributorname + '%'};
     if (req.query.active === 'active') final_where.where.active = true;
     if (req.query.active === 'cancelled') final_where.where.active = false;
 
 
     if (req.query.name) final_where.where.combo_id = req.query.name;
 
-    if (req.query.startsaledate) final_where.where.saledate = {gte: req.query.startsaledate};
-    if (req.query.endsaledate) final_where.where.saledate = {lte: req.query.endsaledate};
+    if (req.query.startsaledate) final_where.where.saledate = {[Op.gte]: req.query.startsaledate};
+    if (req.query.endsaledate) final_where.where.saledate = {[Op.lte]: req.query.endsaledate};
 
     if ((req.query.startsaledate) && (req.query.endsaledate)) final_where.where.saledate = {
-        gte: req.query.startsaledate,
-        lte: req.query.endsaledate
+        [Op.gte]: req.query.startsaledate,
+        [Op.lte]: req.query.endsaledate
     };
 
     //fetch records for specified page
@@ -430,7 +428,7 @@ exports.sales_by_date = function (req, res) {
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
 
     //sort by specified field and specified order, otherwise sort by sale date
-    if (query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+    if (query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
     else final_where.order = [['saledate', 'DESC']];
 
     final_where.attributes = ['id', [sequelize.fn('DATE_FORMAT', sequelize.col('saledate'), "%Y-%m-%d"), 'saledate'], [sequelize.fn('count', sequelize.col('saledate')), 'count'], 'active'];
@@ -466,28 +464,28 @@ exports.sales_by_month = function (req, res) {
         query = req.query;
     final_where.where = qwhere; //start building where
 
-    if (req.query.user_username) final_where.where.user_username = {like: '%' + req.query.user_username + '%'};
+    if (req.query.user_username) final_where.where.user_username = {[Op.like]: '%' + req.query.user_username + '%'};
     if (query.login_data_id) final_where.where.login_data_id = query.login_data_id;
-    var distributor_filter = (req.query.distributorname) ? {like: '%' + req.query.distributorname + '%'} : {like: '%%'};
+    var distributor_filter = (req.query.distributorname) ? {[Op.like]: '%' + req.query.distributorname + '%'} : {[Op.like]: '%%'};
 
     if (req.query.active === 'active') final_where.where.active = true;
     if (req.query.active === 'cancelled') final_where.where.active = false;
 
     if (req.query.name) final_where.where.combo_id = req.query.name;
 
-    if (req.query.startsaledate) final_where.where.saledate = {gte: req.query.startsaledate};
-    if (req.query.endsaledate) final_where.where.saledate = {lte: req.query.endsaledate};
+    if (req.query.startsaledate) final_where.where.saledate = {[Op.gte]: req.query.startsaledate};
+    if (req.query.endsaledate) final_where.where.saledate = {[Op.lte]: req.query.endsaledate};
 
     if ((req.query.startsaledate) && (req.query.endsaledate)) final_where.where.saledate = {
-        gte: req.query.startsaledate,
-        lte: req.query.endsaledate
+        [Op.gte]: req.query.startsaledate,
+        [Op.lte]: req.query.endsaledate
     };
 
     //fetch records for specified page
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
 
-    if (query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir); //sort by specified field and specified order
+    if (query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]]; //sort by specified field and specified order
     else final_where.order = [['saledate', 'DESC']];
 
     final_where.attributes = ['id', [sequelize.fn('DATE_FORMAT', sequelize.col('saledate'), "%Y-%m"), 'saledate'], [sequelize.fn('count', sequelize.col('saledate')), 'count']];
@@ -603,7 +601,7 @@ exports.sales_by_expiration = function (req, res) {
     if (req.query.next) var end = sequelize.literal('CURDATE() + INTERVAL ' + req.query.next + ' DAY');
     else if (req.query.endsaledate) var end = req.query.endsaledate;
 
-    final_where.where = (end) ? {end_date: {between: [start, end]}} : {end_date: {gte: start}};
+    final_where.where = (end) ? {end_date: {[Op.between]: [start, end]}} : {end_date: {[Op.gte]: start}};
 
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
@@ -613,7 +611,7 @@ exports.sales_by_expiration = function (req, res) {
         model: db.login_data,
         required: true,
         attributes: ['username'],
-        where: {username: {like: client_filter}}
+        where: {username: {[Op.like]: client_filter}}
     }]
     final_where.group = ['login_id'];
     final_where.order = [['end_date', 'DESC']];
@@ -663,31 +661,27 @@ exports.latest = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
+exports.dataByID = function (req, res, next) {
+  const getID = Joi.number().integer().required();
+  const { error, value } = getID.validate(req.params.MySalesId || req.params.salesReportId);
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
-            message: 'Data is invalid'
-        });
+  if (error) {
+    return res.status(400).send({ message: 'Data is invalid' });
+  }
+
+  DBModel.findOne({
+    where: { id: value },
+    //include: [{model: db.combo}, {model: db.users}]
+  }).then(function (result) {
+    if (!result) {
+      return res.status(404).send({ message: 'No data with that identifier has been found' });
     }
-    DBModel.find({
-        where: {id: id},
-        //include: [{model: db.combo}, {model: db.users}]
-    }).then(function (result) {
-        if (!result) {
-            return res.status(404).send({
-                message: 'No data with that identifier has been found'
-            });
-        } else {
-            req.salesReport = result;
-            next();
-            return null;
-        }
-    }).catch(function (err) {
-        winston.error("Getting data for specific sale failed with error: ", err);
-        return next(err);
-    });
-
+    req.salesReport = result;
+    next();
+  }).catch(function (err) {
+    winston.error("Getting data for specific sale failed with error: ", err);
+    return res.status(500).send({ message: 'Error at getting  my salesreport data' });
+  });
 };
 
 
@@ -790,15 +784,14 @@ exports.download_invoice = function (req, res) {
                 attributes: ['title', 'content'],
                 where: {template_id: 'invoice-info'}
 
-            }).then(function (result, err) {
+            }).then(async (result) => {
 
-                var compiled = ejs.compile(fs.readFileSync('modules/mago/server/templates/salesreport-invoice.html', 'utf8'));
+                var compiled = handlebars.compile(fs.readFileSync('modules/mago/server/templates/salesreport-invoice.html', 'utf8'));
                 var images = req.app.locals.backendsettings[req.token.company_id].company_logo;
                 var url = req.app.locals.backendsettings[req.token.company_id].assets_url;
 
 
                 if (!result) {
-
                     //if no result found in Adm System
                     var html = compiled({
                         info0: 'www.magoware.tv',
@@ -824,16 +817,25 @@ exports.download_invoice = function (req, res) {
                         distributorname: results.user.username,
                         sale_type: (results.length > 1) ? "Ri-abonim" : "Aktivizim",
                     });
-                    var options = {format: 'Letter', phantomPath: phantomjs.path, timeout: '100000'};
-                    var filename = 'Invoice for ' + results.login_datum.username + req.params.invoiceID + '.pdf';
 
-                    pdf.create(html, options).toFile('./public/tmp/' + filename, function (err, pdfres) {
-                        if (err) {
-                            return winston.error("There was a error creating the pdf", err);
-                        }
+                    var filename = 'Invoice for ' + results.login_datum.username + req.params.invoiceID + '.pdf';
+                    try {
+                        const browser = await puppeteer.launch();
+                        const page = await browser.newPage()
+
+                        // We set the page content as the generated html by handlebars
+                        await page.setContent(html)
+
+                        // we Use pdf function to generate the pdf in the same folder as this file.
+                        let pdfgen = await page.pdf({ path: './public/tmp/' + filename, format: 'Letter' })
+
+                        await browser.close();
                         res.setHeader('x-filename', filename);
-                        res.sendFile(pdfres.filename);
-                    });
+                        res.send(pdfgen);
+                    } catch (error) {
+                        winston.error("There was a error creating the pdf", error);
+                        return;
+                    }
                 }
                 //./if no result found in Adm System
 
@@ -867,19 +869,26 @@ exports.download_invoice = function (req, res) {
                         distributorname: results.user.username,
                         sale_type: (results.length > 1) ? "Ri-abonim" : "Aktivizim",
                     });
-                    var options = {format: 'Letter', timeout: '100000', phantomPath: phantomjs.path};
                     var filename = 'Invoice for ' + results.login_datum.username + req.params.invoiceID + '.pdf';
 
-                    pdf.create(html, options).toFile('./public/tmp/' + filename, function (err, pdfres) {
-                        if (err) {
-                            return winston.error("There was a error creating the pdf", err);
-                        }
+                    try {
+                        const browser = await puppeteer.launch();
+                        const page = await browser.newPage()
 
+                        // We set the page content as the generated html by handlebars
+                        await page.setContent(html)
+
+                        // we Use pdf function to generate the pdf in the same folder as this file.
+                        let pdfgen = await page.pdf({ path: `./public/tmp/${filename}`, format: 'Letter' })
+
+                        await browser.close();
                         res.setHeader('x-filename', filename);
-                        res.sendFile(pdfres.filename);
-                    });
+                        res.send(pdfgen);
+                    } catch (error) {
+                        winston.error("There was a error creating the pdf", error);
+                        return;
+                    }
                 }
-                //./ if result is found in Adm System
             });
             return null;
         }
@@ -888,5 +897,3 @@ exports.download_invoice = function (req, res) {
         res.jsonp(err);
     });
 };
-
-//./download_invoice

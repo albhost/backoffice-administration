@@ -16,9 +16,10 @@ module.exports = function(app) {
     app.route('/api/Submenu/:SubmenuId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(Submenu.dataByID)
         .get(Submenu.read)
         .put(Submenu.update)
         .delete(Submenu.delete);
 
-    app.param('SubmenuId', Submenu.dataByID);
+    //app.param('SubmenuId', Submenu.dataByID);
 };

@@ -22,10 +22,9 @@ module.exports = function(app) {
     app.route('/api/groups/:groupId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(groups.dataByID)
         .get(groups.read)
         .put(groups.update)
         .delete(groups.delete);
-
-    app.param('groupId', groups.dataByID);
 
 };

@@ -20,8 +20,10 @@ export default function (nga, admin) {
                         return '5 - Web TV';
                     } else if (value === 6) {
                         return '6 - Apple TV';
-                    } else if (value === 6) {
+                    } else if (value === 7) {
                       return '7 - Web Smart Tv';
+                    } else if (value === 8) {
+                      return '8 - Web Smart Tv';
                     }
                 })
                 .label('App ID'),

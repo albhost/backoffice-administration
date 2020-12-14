@@ -18,10 +18,9 @@ module.exports = function(app) {
     app.route('/api/mychannels/:mychannelId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(myChannels.dataByID)
         .get(myChannels.read)
         .put(myChannels.update)
         .delete(myChannels.delete);
-
-    app.param('mychannelId', myChannels.dataByID);
 
 };

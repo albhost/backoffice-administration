@@ -3,11 +3,12 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     db = require(path.resolve('./config/lib/sequelize')).models,
     winston = require('winston'),
-    DBModel = db.combo_packages;
+    DBModel = db.combo_packages,
+    Joi = require("joi");
 
 /**
  * Create
@@ -43,7 +44,7 @@ exports.update = function(req, res) {
     var updateData = req.comboPackage;
 
     if(req.comboPackage.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Cannot update attributes at combo_package, error: ",err);
@@ -63,7 +64,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.comboPackage;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -127,17 +128,20 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.comboPackageId);
 
-  DBModel.find({
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+  DBModel.findOne({
     where: {
-      id: id
+      id: value
     },
     include: [{model: db.combo}, {model: db.package}]
   }).then(function(result) {
@@ -151,7 +155,9 @@ exports.dataByID = function(req, res, next, id) {
     }
   }).catch(function(err) {
       winston.error("Error at finding combo_package by id, error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting combo packages data'
+      });
   });
 
 };

@@ -5,11 +5,18 @@ var path = require('path'),
   models = db.models,
   fs = require('fs'),
   qr = require('qr-image'),
-  download = require('download-file'),
   winston = require(path.resolve('./config/lib/winston'));
+
+const responses = require(path.resolve("./config/responses.js"));
+
+const  { Op } = require('sequelize');
+
+const Joi = require("joi")
 
 var authentication = require(path.resolve('./modules/deviceapiv2/server/controllers/authentication.server.controller.js'));
 var push_functions = require(path.resolve('./custom_functions/push_messages'));
+const {generate_internal_hash_token_v2} = require("../../../streams/server/controllers/streamkeydelivery.server.controller");
+const {getStreamServersLoad} = require("../../../mago/server/utils/getStreamServerLoad");
 
 /**
  * @api {post} /apiv2/main/device_menu /apiv2/main/device_menu
@@ -29,7 +36,7 @@ exports.device_menu = function (req, res) {
     attributes: ['id', 'title', 'url', 'icon_url', [db.sequelize.fn('concat', req.app.locals.backendsettings[req.authParams.companyId].assets_url, db.sequelize.col('icon_url')), 'icon'],
       'menu_code', 'position', [db.sequelize.fn('concat', "", db.sequelize.col('menu_code')), 'menucode']],
     where: {
-      appid: {$like: '%' + req.authParams.auth.appid + '%'},
+      appid: { [Op.like] : '%' + req.authParams.auth.appid + '%'},
       isavailable: true,
       is_guest_menu: get_guest_menus,
       company_id: req.authParams.companyId
@@ -67,7 +74,7 @@ exports.device_menu_get = function (req, res) {
     attributes: ['id', 'title', 'url', 'icon_url', [db.sequelize.fn('concat', req.app.locals.backendsettings[req.authParams.companyId].assets_url, db.sequelize.col('icon_url')), 'icon'],
       'menu_code', 'position', ['menu_code', 'menucode']],
     where: {
-      appid: {$like: '%' + req.authParams.auth.appid + '%'},
+      appid: {[Op.like]: '%' + req.authParams.auth.appid + '%'},
       isavailable: true,
       is_guest_menu: get_guest_menus,
       company_id: req.authParams.companyId
@@ -105,7 +112,7 @@ exports.get_devicemenu_levelone = function (req, res) {
       [db.sequelize.fn('concat', req.app.locals.backendsettings[req.authParams.companyId].assets_url, db.sequelize.col('icon_url')), 'icon_url'],
       'menu_code', 'position', 'parent_id', 'menu_description', ['menu_code', 'menucode']],
     where: {
-      appid: {$like: '%' + req.authParams.auth.appid + '%'},
+      appid: {[Op.like]: '%' + req.authParams.auth.appid + '%'},
       isavailable: true,
       is_guest_menu: get_guest_menus,
       company_id: req.authParams.companyId
@@ -141,7 +148,7 @@ exports.get_devicemenu_leveltwo = function (req, res) {
       [db.sequelize.fn('concat', req.app.locals.backendsettings[req.authParams.companyId].assets_url, db.sequelize.col('icon_url')), 'icon'],
       [db.sequelize.fn('concat', req.app.locals.backendsettings[req.authParams.companyId].assets_url, db.sequelize.col('icon_url')), 'icon_url'],
       'menu_code', 'position', 'parent_id', 'menu_description', ['menu_code', 'menucode']],
-    where: {appid: {$like: '%' + req.authParams.auth.appid + '%'}, isavailable: true, company_id: req.authParams.companyId},
+    where: {appid: {[Op.like]: '%' + req.authParams.auth.appid + '%'}, isavailable: true, company_id: req.authParams.companyId},
     order: [['position', 'ASC']]
   }).then(function (result) {
 
@@ -259,3 +266,125 @@ exports.qr_login = function (req, res) {
 };
 
 
+/**
+ * @api {post} /apiv3/arbiter/get/url Get Stream Url
+ * @apiVersion 0.2.0
+ * @apiName GetStreamUrl
+ * @apiGroup DeviceAPI
+ * @apiParam {String} content_path Content Path.
+ * @apiParam {Boolean} hash_token enable hash token for streams.
+ * @apiParam {String} auth Encrypted authentication token string.
+ * @apiDescription Logs user out of devices of the same group as this. (Updates device_active flag to false, sends push notification to log user out)
+ * @apiSuccessExample Success-Response:
+ {
+    "status_code": 200,
+    "error_code": 1,
+    "timestamp": 1,
+    "error_description": "OK",
+    "response_object": [
+        {
+            "url": "http://51.159.0.64:8082/program/stream/stream.m3u8"
+        }
+    ]
+}
+ * @apiErrorExample Error-Response:
+ *     {
+ *       "status_code": 704,
+ *       "error_code": -1,
+ *       "timestamp": 1,
+ *       "error_description": "REQUEST_FAILED",
+ *       "extra_data": "Error processing request",
+ *       "response_object": []
+ *     }
+ * @apiErrorExample Error-Response:
+ *     {
+ *       "status_code": 704,
+ *       "error_code": -1,
+ *       "timestamp": 1,
+ *       "error_description": "REQUEST_FAILED",
+ *       "extra_data": "Unable to find any device with the required specifications",
+ *       "response_object": []
+ *     }
+ * @apiErrorExample Error-Response:
+ *     {
+ *       "status_code": 704,
+ *       "error_code": -1,
+ *       "timestamp": 1,
+ *       "error_description": "DATABASE_ERROR",
+ *       "extra_data": "Error connecting to database",
+ *       "response_object": []
+ *     }
+ */
+exports.arbiter = async function (req, res) {
+
+  const schema = Joi.object().keys({
+    content_path: Joi.string().required(),
+    hash_token: Joi.boolean().default(false),
+    public_content: Joi.boolean().default(false)
+  })
+
+  const {error, value} = schema.validate(req.query);
+
+  const { content_path, hash_token } = value;
+
+  if (error) {
+    return response.send_res_get(req, res, [], 400, -1, 'BAD_REQUEST_DESCRIPTION', 'BAD_REQUEST_DATA', 'no-store');
+  }
+
+  try {
+    const companyId = req.headers.company_id ? req.headers.company_id : 1;
+
+    let min;
+    let server;
+
+    const serversJson = await getStreamServersLoad();
+    const servers = JSON.parse(serversJson);
+
+    if (servers.length <= 0) {
+      return response.send_res_get(req, res, [], 404, -1, 'NO_SERVER_AVAILABLE_FOR_STREAM', 'NO_SERVER_AVAILABLE_FOR_STREAM_DATA', 'no-store');
+    }
+
+    for (let i = 0; i < servers.length; i++) {
+      const {connections, outRate, is_available} = servers[i];
+
+      if(!is_available) {
+        continue
+      }
+
+      if (connections >= servers[i].connections_threshold) {
+        //we can't take it here, its full
+        continue;
+      }
+
+      if (outRate >= servers[i].out_rate_threshold) {
+        continue;
+      }
+
+      if (typeof min == "undefined") {
+        min = connections;
+        server = servers[i];
+      }
+
+      if (connections < min) {
+        min = connections;
+        server = servers[i];
+      }
+    }
+
+    if (!server) {
+      return response.send_res_get(req, res, [], 404, -1, 'NO_SERVER_AVAILABLE_FOR_STREAM', 'NO_SERVER_AVAILABLE_FOR_STREAM_DATA', 'no-store');
+    }
+
+    const finalResponse = new responses.OK();
+    let hash = "";
+    if(hash_token) {
+      hash = generate_internal_hash_token_v2(req);
+
+      if(!hash) hash = "";
+    }
+    finalResponse.extra_data = server.base_url + content_path + hash
+    res.status(200).send(finalResponse)
+  } catch (e) {
+    response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
+  }
+}

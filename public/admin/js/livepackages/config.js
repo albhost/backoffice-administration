@@ -29,6 +29,12 @@ export default function (nga, admin) {
 
     livepackages.creationView()
         .title('<h4>Packages <i class="fa fa-angle-right" aria-hidden="true"></i> Create: Package</h4>')
+        .onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
+            notification.log(`Package created successfully`, { addnCls: 'humane-flatty-success' });
+            // redirect to the list view
+            $state.go($state.current, {}, {reload : true})
+                .then($state.go($state.get('list'), { entity: entity.name() })); // cancel the default action (redirect to the edition view)
+        }])
         .fields([
             nga.field('package_name', 'string')
                 .attributes({ placeholder: 'Name the package you are creating' })

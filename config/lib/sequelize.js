@@ -1,6 +1,6 @@
 "use strict";
 
-var
+const
     path = require('path'),
     config = require(path.resolve('./config/config')),
     Sequelize = require('sequelize'),
@@ -10,19 +10,19 @@ var
     http = require('http'),
     https = require('https');
 
-    const default_activity = require(path.resolve("./config/defaultvalues/activity.json"));
-    const default_app_groups = require(path.resolve("./config/defaultvalues/app_groups.json"));
-    const default_package_type = require(path.resolve("./config/defaultvalues/package_type.json"));
+const default_activity = require(path.resolve("./config/defaultvalues/activity.json"));
+const default_app_groups = require(path.resolve("./config/defaultvalues/app_groups.json"));
+const default_package_type = require(path.resolve("./config/defaultvalues/package_type.json"));
 
-    const complete_menu_object = require(path.resolve("./config/defaultvalues/menu_map.json"));
-    const complete_api_group = [];
-    const complete_api_url = [];
-    
-    const protocol = (config.port === 443) ? 'https://' : 'http://'; //port 443 means we are running https, otherwise we are running http (preferably on port 80)
+const complete_menu_object = require(path.resolve("./config/defaultvalues/menu_map.json"));
+const complete_api_group = [];
+const complete_api_url = [];
 
-    db.Sequelize = Sequelize;
-    db.models = {};
-    db.discover = [];
+const protocol = (config.port === 443) ? 'https://' : 'http://'; //port 443 means we are running https, otherwise we are running http (preferably on port 80)
+
+db.Sequelize = Sequelize;
+db.models = {};
+db.discover = [];
 
 // Expose the connection function
 db.connect = function(database, username, password, options) {
@@ -33,7 +33,7 @@ db.connect = function(database, username, password, options) {
     var sequelize = new db.Sequelize(database, username, password, options);
 
     db.discover.forEach(function(location) {
-        var model = sequelize["import"](location);
+        var model = require(path.join(location))(sequelize, Sequelize.DataTypes);
         if (model)
             db.models[model.name] = model;
     });
@@ -68,6 +68,20 @@ db.connect = function(database, username, password, options) {
                                         callback(null)
                                     }
                                 });
+                        },
+                        function(callback){
+                            companyFunctions.createAdminCompany()
+                              .then(function() {
+                                  callback(null)
+                              })
+                              .catch(function(err) {
+                                  if (err.code == 500) {
+                                      process.exit();
+                                  }
+                                  else{
+                                      callback(null)
+                                  }
+                              });
                         },
                         function(callback){
                             var baseurl = process.env.NODE_HOST || 'localhost' + ":" + config.port;
@@ -192,8 +206,8 @@ db.connect = function(database, username, password, options) {
                     });
                     return null;
                 }).then(function() {
-                    var schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js"));
-                    schedule.reload_scheduled_programs(); //reloading the scheduled future programs into the event loop
+                    //var schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js"));
+                    //schedule.reload_scheduled_programs(); //reloading the scheduled future programs into the event loop
                     return null;
                 }).catch(function(err) {
                     winston.error("An error occured: ", err);
@@ -201,12 +215,12 @@ db.connect = function(database, username, password, options) {
                 });
         }
         else{
-            var schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js"));
-            schedule.reload_scheduled_programs(); //reloading the scheduled future programs into the event loop
+            //var schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js"));
+            //schedule.reload_scheduled_programs(); //reloading the scheduled future programs into the event loop
         }
         return null;
     }).catch(function(error) {
-        winston.error("Error connecting to database - ", error);
+        winston.error(`Error connecting to database - ${error}`);
     });
 
     db.sequelize = sequelize;

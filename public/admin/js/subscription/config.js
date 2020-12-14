@@ -135,6 +135,7 @@ export default function (nga, admin){
         ])
         .onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
             progression.done();
+            notification.log(`Subscription added successfully`, { addnCls: 'humane-flatty-success' });
             $state.go($state.get('edit'), {entity: 'CustomerAccount', id: entry.values.user});
             return false;
         }]);
@@ -169,6 +170,7 @@ export default function (nga, admin){
 					.template(edit_button),
         ]).onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
 			progression.done();
+            notification.log(`Subscription edit successfully`, { addnCls: 'humane-flatty-success' });
 			$state.go($state.get('list'), { entity: entity.name() });
 			return false;
 		}]);

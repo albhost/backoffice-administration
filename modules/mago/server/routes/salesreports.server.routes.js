@@ -23,6 +23,7 @@ module.exports = function(app) {
     app.route('/api/salesreports/:salesReportId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(salesReports.dataByID)
         .get(salesReports.read)
         .put(salesReports.update)
         .delete(salesReports.delete);
@@ -31,6 +32,7 @@ module.exports = function(app) {
     app.route('/api/salesreports/cancel/:salesReportId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(salesReports.dataByID)
         .post(cancelSalesreport.update);
 
 
@@ -39,7 +41,6 @@ module.exports = function(app) {
         .all(policy.isAllowed)
         .post(salesReports.annul);
 
-    app.param('salesReportId', salesReports.dataByID);
 
     //todo: set rights
     app.route('/api/sales_by_product')
@@ -60,15 +61,17 @@ module.exports = function(app) {
     app.route('/api/MySales/:MySalesId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(salesReports.dataByID)
         .get(salesReports.read)
         .put(salesReports.update)
         .delete(salesReports.delete);
 
-    app.param('MySalesId', salesReports.dataByID);
+    //app.param('MySalesId', salesReports.dataByID);
 
     app.route('/api/MySales/annul/:MySalesId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(salesReports.dataByID)
         .put(salesReports.annul);
 
     /* ===== Dashboard ===== */

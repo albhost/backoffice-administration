@@ -67,6 +67,19 @@
         "COMING_SOON": "Coming soon",
         "FAVORITE_CHANNEL_ALREADY_EXISTS_AS_FAVORITE": "This channel already exists as favorite",
         "NO_COMPANIES_AVAILABLE": "There are no companies with this username",
-        "USER_PARAMETER_MISSING": "User parameter in query missing"
+        "USER_PARAMETER_MISSING": "User parameter in query missing",
+        "APP_VERSION_DEPRECREATED_DESCRIPTION": "APP_VERSION_DEPRECREATED",
+        "APP_VERSION_DEPRECREATED": "This app version is no longer supported",
+        "FEED_ERROR_DESCRIPTION": "FEED_ERROR_DESCRIPTION",
+        "FEED_ERROR_DATA": "FEED_ERROR_DATA",
+        "COMPANY_NOT_FOUND_DATA": "Could not find a company with specified id",
+        "COMPANY_NOT_FOUND_DESCRIPTION": "COMPANY_NOT_FOUND_DESCRIPTION",
+        "CURRENT_PASSWORD_IS_INVALID_DATA": "Current password is invalid",
+        "CURRENT_PASSWORD_MUST_BE_DIFFERENT_FROM_NEW_PASSWORD_DATA": "Current password must be different from new password",
+        "PASSWORDS_ARE_INVALID": "Passwords are invalid",
+        "PASSWORDS_ARE_INVALID_DATA": "PASSWORDS_ARE_INVALID_DATA",
+        "CURRENT_PASSWORD_IS_INVALID": "CURRENT_PASSWORD_IS_INVALID",
+        "NO_SERVER_AVAILABLE_FOR_STREAM": "NO_SERVER_AVAILABLE_FOR_STREAM",
+        "NO_SERVER_AVAILABLE_FOR_STREAM_DATA": "There are no available server to stream"
     }
 }

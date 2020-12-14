@@ -40,11 +40,16 @@ module.exports = {
 
     //pjesa poshte nuk duhen perdorur me
 
-    send_res_get: function(req, res, result, status, error, description, extra_data, header){
+    send_res_get: function(req, res, result, status, error, description, extra_data, cache_header){
         let clear_response = new this.APPLICATION_RESPONSE(req.body.language, status, error, description, extra_data, result);
         if (req.timestamp) {
             clear_response.timestamp = req.timestamp;
         }
+
+        if (cache_header) {
+            res.setHeader('cache-control', cache_header);
+        }
+
         res.send(clear_response);
     },
 

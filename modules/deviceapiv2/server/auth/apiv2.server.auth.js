@@ -1,19 +1,19 @@
 'use strict';
 
-var CryptoJS = require("crypto-js"),
+const CryptoJS = require("crypto-js"),
   crypto = require("crypto"),
-  cryptoAsync = require('@ronomon/crypto-async'),
-  querystring = require("querystring"),
+  querystring = require('querystring'),
   path = require('path'),
   db = require(path.resolve('./config/lib/sequelize')),
   models = db.models,
   authenticationHandler = require(path.resolve('./modules/deviceapiv2/server/controllers/authentication.server.controller.js')),
   redis = require(path.resolve('./config/lib/redis')),
   response = require(path.resolve("./config/responses.js")),
-  winston = require("winston");
+  winston = require("winston"),
+  tldjs = require('tldjs');
 
 const mobileAppIDs = ['2', '3'];
-const appIDs = ['1', '2', '3', '4', '5', '6', '7'];
+const appIDs = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 /**
  * Verify auth token middleware
@@ -247,7 +247,7 @@ function auth_decrypt1(token_string, key) {
 
 
 function auth_veryfyhash(password,salt,hash) {
-    var b = new Buffer(salt, 'base64');
+    var b = Buffer.from(salt, 'base64');
     var iterations = 1000;
     var clength = 24;
 
@@ -258,6 +258,7 @@ function auth_veryfyhash(password,salt,hash) {
 
 exports.plainAuth = function(req, res, next) {
     req.plaintext_allowed = true;
+    req.body.language = req.get("language") || "eng";
     next();
 }
 
@@ -266,9 +267,12 @@ exports.emptyCredentials = function(req, res, next) {
     next();
 }
 
-exports.acessOnlyFrom = function(req, res, next, urls) {
+exports.acessOnlyFrom = function (req, res, next, urls) {
+    const {getDomain} = tldjs;
     const currentUrl = req.get("host");
-    if(urls.indexOf(currentUrl) !== -1) {
+
+    const getSubDomain = getDomain(currentUrl);
+    if ((urls.indexOf(currentUrl) !== -1) || (urls.indexOf(getSubDomain) !== -1)) {
         next();
     } else {
         response.send_res(req, res, [], 888, -1, 'REQUEST_FAILED', 'FORBIDDEN_DATA', 'no-store');
@@ -300,6 +304,43 @@ exports.oneTimeAccessToken = function(req, res, next) {
         req.isOneTimeToken = true;
         next();
     })
+}
+
+exports.oneTimeAccessTokenDRM = function (req, res, next) {
+  let companyId = req.query.coid;
+  let token = req.query.token;
+  let redisKey = companyId + ':one_time_access_tokens:' + token;
+
+  redis.client.get(redisKey, function (err, accessToken) {
+    if (err) {
+      return response.send_res(req, res, [], 888, -1, 'BAD_TOKEN_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
+    }
+
+    // if exist don't allow other request with same token
+    if (accessToken) {
+      return response.send_res(req, res, [], 888, -1, 'BAD_TOKEN_DESCRIPTION', 'INVALID_TOKEN', 'no-store');
+    }
+    redis.client.set(redisKey, '1', 'EX', 300); //Expire in 5 minutes
+    next();
+  })
+}
+
+exports.checkBlacklistedApp = function(req, res, next) {
+    let companyId = req.headers.company_id ? req.headers.company_id : 1;
+    //let clientAppConfig = req.app.locals.advanced_settings[companyId].client_app;
+    
+    let appVersion = req.headers.appversion;
+    if (!appVersion) {
+        let authParams = decodeAuth(req);
+        appVersion = authParams.appversion
+    }
+
+    // if (clientAppConfig.blacklist.indexOf(appVersion) != -1) {
+    //     response.send_res(req, res, [], 888, -1, 'APP_VERSION_DEPRECREATED_DESCRIPTION', 'APP_VERSION_DEPRECREATED', 'no-store');
+    //     return;
+    // }
+
+    next();
 }
 
 /**
@@ -459,7 +500,7 @@ function isAllowed(req, res, next) {
 function isAllowedAsync(req, res, next) {
     let companyId = req.headers.company_id || 1;
 
-    if(req.body.isFromCompanyList) {
+    if (req.body.isFromCompanyList) {
         companyId = req.body.company_id;
     }
 
@@ -554,8 +595,7 @@ function isAllowedAsync(req, res, next) {
 function verifyAuth(req, res, next, auth, params) {
     if(req.body.hdmi === 'true' && mobileAppIDs.indexOf(auth.appid) !== -1) {
         response.send_res(req, res, [], 888, -1, 'BAD_TOKEN_DESCRIPTION', 'INVALID_INSTALLATION', 'no-store'); //hdmi cannot be active for mobile devices
-    }
-    else if(valid_appid(auth) === true){
+    } else if (valid_appid(auth) === true) {
         if (req.isOneTimeToken && params.rawAuth) {
             let redisKey = params.companyId + ':one_time_access_tokens:' + params.rawAuth;
             redis.client.set(redisKey, '1', 'EX', 1800); //Expire in 2 minutes
@@ -563,27 +603,32 @@ function verifyAuth(req, res, next, auth, params) {
 
         set_screensize(auth);
 
-        if(req.empty_cred){
+        if (req.empty_cred) {
             req.auth_obj = auth;
             next();
-        }
-        else{
+        } else {
             //reading client data
             models.login_data.findOne({
                 where: {username: auth.username, company_id: params.companyId}
             }).then(function (result) {
-                if(result) {
-                    if(result.account_lock) {
+                if (result) {
+                    if (result.account_lock) {
                         response.send_res(req, res, [], 703, -1, 'ACCOUNT_LOCK_DESCRIPTION', 'ACCOUNT_LOCK_DATA', 'no-store');
                         return;
                     }
 
+                    if (result.verified === false) {
+                        response.send_res(req, res, [], 704, -1, 'EMAIL_NOT_CONFIRMED', 'EMAIL_NOT_CONFIRMED_DESC', 'no-store');
+                        return;
+                    }
+
+
                     //the user is a normal client account. check user rights to make requests with his credentials
-                    if(auth.username !== 'guest') {
-                        authenticationHandler.authenticateAsync(auth.password, result.salt, result.password, function(authenticated) {
+                    if (auth.username !== 'guest') {
+                        authenticationHandler.authenticateAsync(auth.password, result.salt, result.password, function (authenticated) {
                             if (authenticated === false) {
                                 //Requests may come after login with account kit.
-                                authenticationHandler.encryptPasswordAsync(result.username, result.salt, function(hash) {
+                                authenticationHandler.encryptPasswordAsync(result.username, result.salt, function (hash) {
                                     if (hash !== auth.password.replace(/ /g, "+")) {
                                         response.send_res(req, res, [], 704, -1, 'WRONG_PASSWORD_DESCRIPTION', 'WRONG_PASSWORD_DATA', 'no-store');
                                         return
@@ -596,7 +641,6 @@ function verifyAuth(req, res, next, auth, params) {
                                 })
                                 return
                             }
-
                             //Normal user was authenticated
                             req.thisuser = result;
                             req.auth_obj = auth;
@@ -604,7 +648,7 @@ function verifyAuth(req, res, next, auth, params) {
                         });
                     }
                     //login as guest is enabled and the user is guest. allow request to be processed
-                    else if(req.app.locals.backendsettings[params.companyId].allow_guest_login === true && auth.username === 'guest'){
+                    else if (req.app.locals.backendsettings[params.companyId].allow_guest_login === true && auth.username === 'guest') {
                         req.thisuser = result;
                         req.auth_obj = auth;
                         next();
@@ -639,7 +683,7 @@ function decodeAuth(req) {
             authEncoded = authEncoded.replace(/[{}]/g, '');
 
             //Parse auth parameters to object
-            authParams = querystring.parse(authEncoded,",","=");
+            authParams = querystring.parse(authEncoded, ",", "=");
             if (authParams[' auth']) {
                 authParams = removeLeadingKeySpaces(authParams);
                 authParams.rawAuth = authParams['auth'];
@@ -699,7 +743,7 @@ function removeLeadingKeySpaces(obj) {
 
 function decryptAuth(auth, key) {
     return new Promise(function(resolve, reject) {
-        let iv = new Buffer(key);
+        let iv = Buffer.alloc(key.length, key);
 
         decryptAsync(key, iv, auth, function(err, plain) {
             if (err) {
@@ -711,43 +755,26 @@ function decryptAuth(auth, key) {
     })
 }
 
+// crypto - native Node.js APIs
 function decryptAsync(key, iv, cipherText, callback) {
-    key = new Buffer(key);
-    cipherText = new Buffer(cipherText, 'base64');
-    //Leave more than enough space for block cipher:
-    let target = Buffer.alloc(cipherText.length + 64);
-    let targetOffset = 0;
+    try {
+        key = Buffer.from(key);
+        cipherText = Buffer.from(cipherText, 'base64');
 
-    cryptoAsync.cipher(
-      'AES-128-CBC',
-      0, //encrypt=1, decrypt=0
-      key,
-      0,
-      key.length,
-      iv,
-      0,
-      iv.length,
-      cipherText,
-      0,
-      cipherText.length,
-      target,
-      targetOffset,
-      function(err, targetSize) {
-          if (err) {
-              return callback(err);
-          }
-
-          let plainText = target.slice(targetOffset, targetOffset + targetSize);
-          callback(undefined, plainText.toString('utf8'));
-      }
-    )
+        const decipher = crypto.createDecipheriv("aes-128-cbc", key, iv);
+        let decrypted = decipher.update(cipherText).toString('utf8');
+        decrypted += decipher.final('utf8');
+        callback(undefined, decrypted);
+    } catch (error) {
+        return callback(error);
+    }
 }
 
 function expiryToken(req, res, next) {
-    if((Math.abs(Date.now() - req.authParams.auth.timestamp)) > 120000) {
+    /*if((Math.abs(Date.now() - req.authParams.auth.timestamp)) > 120000) {
         response.send_res(req, res, [], 888, -1, 'BAD_TOKEN_DESCRIPTION', 'INVALID_TIMESTAMP', 'no-store');
         return;
-    }
+    }*/
 
     if (req.isOneTimeToken && req.authParams.rawAuth) {
         let redisKey = req.authParams.companyId + ':one_time_access_tokens:' + req.authParams.rawAuth;

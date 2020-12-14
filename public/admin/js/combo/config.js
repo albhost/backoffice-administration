@@ -33,6 +33,7 @@ export default function (nga, admin) {
     combo.creationView()
         .onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
             progression.done();
+            notification.log(`Product created successfully`, { addnCls: 'humane-flatty-success' });
             $state.go($state.get('edit'), { entity: entity.name(), id: entry._identifierValue });
             return false;
         }])
@@ -65,6 +66,12 @@ export default function (nga, admin) {
 
     combo.editionView()
     	.actions(['list'])
+        .onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
+            notification.log(`Product edit successfully`, { addnCls: 'humane-flatty-success' });
+            // redirect to the list view
+            $state.go($state.current, {}, {reload : true})
+                .then($state.go($state.get('list'), { entity: entity.name() })); // cancel the default action (redirect to the edition view)
+        }])
     	.title('<h4>Products & Services <i class="fa fa-angle-right" aria-hidden="true"></i> Edit: {{ entry.values.name }}</h4>')
         .fields([
             combo.creationView().fields(),

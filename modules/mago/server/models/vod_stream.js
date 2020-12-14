@@ -41,7 +41,7 @@ module.exports = function(sequelize, DataTypes) {
         },
         encryption: {
             type: DataTypes.BOOLEAN,
-            allowNull: false
+            allowNull: true
         },
         token_url: {
             type: DataTypes.STRING(255),
@@ -59,6 +59,10 @@ module.exports = function(sequelize, DataTypes) {
             type: DataTypes.STRING(20),
             allowNull: false,
             defaultValue: 'regular',
+        },
+        thumbnail_url: {
+            type: DataTypes.STRING(255),
+            defaultvalue: ''
         }
     }, {
         tableName: 'vod_stream',

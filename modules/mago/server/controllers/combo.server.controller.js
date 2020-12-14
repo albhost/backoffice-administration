@@ -3,14 +3,15 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    DBModel = db.combo;
-    const escape = require(path.resolve('./custom_functions/escape'));
-
+    DBModel = db.combo,
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -51,7 +52,7 @@ exports.update = function(req, res) {
 	var updateData = req.combos;
 
     if(req.combos.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             //update local variable t_vod_duration if the status of the transactional vod combo has changed
             if(req.body.product_id === "transactional_vod"){
                 if(req.body.isavailable === true) req.app.locals.backendsettings[req.token.company_id].t_vod_duration = req.body.duration; //update duration for transactional vod
@@ -78,7 +79,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.combos;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -116,11 +117,12 @@ exports.list = function(req, res) {
         query = req.query;
 
     if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.name = {};
-        qwhere.$or.name.$like = '%'+query.q+'%';
-        qwhere.$or.duration = {};
-        qwhere.$or.duration.$like = '%'+query.q+'%';
+        let filters = []
+        filters.push(
+            { name: { [Op.like]: `%${query.q}%` } },
+            { duration: { [Op.like]: `%${query.q}%` } }
+        );
+        qwhere = { [Op.or]: filters };
     }
 
     //start building where
@@ -129,7 +131,7 @@ exports.list = function(req, res) {
         if(parseInt(query._start)) final_where.offset = parseInt(query._start);
         if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
     }
-    if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+    if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
 
     final_where.distinct = 'id';
@@ -157,32 +159,35 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.comboId);
 
-  DBModel.find({
-    where: {
-      id: id
-    },
-    include: [{model:db.combo_packages}]
-  }).then(function(result) {
-    if (!result) {
-      return res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-    } else {
-      req.combos = result;
-      next();
-      return null;
+    if (error) {
+        return res.status(400).send({message: 'Data is invalid'});
     }
-  }).catch(function(err) {
-      winston.error("Finding combo failed with error: ", err);
-    return next(err);
-  });
+
+    DBModel.findOne({
+        where: {
+            id: value
+        },
+        include: [{model: db.combo_packages}]
+    }).then(function (result) {
+        if (!result) {
+            return res.status(404).send({
+                message: 'No data with that identifier has been found'
+            });
+        } else {
+            req.combos = result;
+            next();
+            return null;
+        }
+    }).catch(function (err) {
+        winston.error("Finding combo failed with error: ", err);
+        return res.status(500).send({
+            message: 'Error at getting combo data'
+        });
+    });
 
 };

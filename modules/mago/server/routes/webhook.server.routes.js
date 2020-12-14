@@ -28,9 +28,9 @@ module.exports = function (app) {
     app.route('/api/webhooks/:webhooksId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(webhooks.dataByID)
         .get(webhooks.read)
         .delete(webhooks.delete)
         .put(webhooks.update);
 
-    app.param('webhooksId', webhooks.dataByID);
 };

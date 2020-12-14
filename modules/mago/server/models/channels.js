@@ -74,6 +74,7 @@ module.exports = function(sequelize, DataTypes) {
             }
             Channels.belongsTo(models.genre, {foreignKey: 'genre_id'});
             Channels.belongsTo(models.settings, {foreignKey: 'company_id'});
+            Channels.hasMany(models.program_content, {foreignKey: 'channel_id'})
         }
     });
     return Channels;

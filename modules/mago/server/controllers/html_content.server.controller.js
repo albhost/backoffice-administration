@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    DBModel = db.html_content;
+    DBModel = db.html_content,
+    Joi = require("joi");
 
 const escape = require(path.resolve('./custom_functions/escape'));
 
@@ -49,7 +50,7 @@ exports.update = function(req, res) {
     var updateData = req.htmlContent;
 
     if(req.htmlContent.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body), req.token.company_id);
             res.json(result);
             return null;
@@ -71,7 +72,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.htmlContent;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -113,7 +114,7 @@ exports.list = function(req, res) {
     final_where.where = qwhere;
     if(parseInt(query._start)) final_where.offset = parseInt(query._start);
     if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-    if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+    if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
     final_where.include = [];
     //end build final where
 
@@ -142,19 +143,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.htmlContentId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({
@@ -167,25 +170,28 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Error finding dataById function at html content, error: ",err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting html content data'
+        });
     });
 
 };
 
-exports.htmlcontent_to_app = function(req, res, next, id) {
+exports.htmlcontent_to_app = function(req, res, next) {
 
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.contentID);
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({
@@ -198,7 +204,9 @@ exports.htmlcontent_to_app = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Error at html content to app, error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting genre data'
+        });
     });
 
 };
@@ -213,11 +221,10 @@ exports.htmlcontent_name_to_app = function(req, res, next) {
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
             name: name_to_search
-        },
-        include: []
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({

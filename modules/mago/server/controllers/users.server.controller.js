@@ -3,21 +3,23 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  joi = require('@hapi/joi'),
+const path = require('path'),
   errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
   db = require(path.resolve('./config/lib/sequelize')).models,
   crypto = require('crypto'),
-  nodemailer = require('nodemailer'),
   DBModel = db.users,
   userFunctions = require(path.resolve('./custom_functions/user'));
 
-const passwordRegex =/(?=.*[A-Z]+.*)(?=.*[0-9]+.*)(?=.*[!@#$%^&*]+.*)(.*[a-z]+.*)/;
+const Joi = require('joi');
+const { Op } = require('sequelize');
 
-const baseValidator = joi.object({
-  hashedpassword: joi.string()
-    .custom(validatePassword)
+const passwordRegex =/(?=.*[A-Z]+.*)(?=.*[0-9]+.*)(?=.*[!@#$%^&*]+.*)(.*[a-z]+.*)/;
+  
+
+
+const baseValidator = Joi.object({
+  hashedpassword: Joi.string().custom(validatePassword)
 }).unknown(true);
 
 exports.baseValidator = baseValidator;
@@ -41,7 +43,7 @@ exports.create = function(req, res) {
     var superadmin_id = 0;
 
     db.groups.findAll({
-        attributes: ['id', 'code'], where: {code: {$in: ['admin', 'superadmin']}}
+        attributes: ['id', 'code'], where: {code: {[Op.in]: ['admin', 'superadmin']}}
     }).then(function(groups){
         if(groups && groups.length >0){
             for(var i=0; i<groups.length; i++){
@@ -104,7 +106,7 @@ exports.createAndInvite = function (req, res) {
 
 
     db.groups.findAll({
-        attributes: ['id', 'code'], where: {code: {$in: ['admin', 'superadmin']}}
+        attributes: ['id', 'code'], where: {code: {[Op.in]: ['admin', 'superadmin']}}
     }).then(function(groups){
         if(groups && groups.length >0){
             for(var i=0; i<groups.length; i++){
@@ -179,50 +181,44 @@ exports.read = function(req, res) {
 /**
  * Update
  */
-exports.update = function(req, res) {
-    let validationResult = baseValidator.validate(req.body);
-    if (validationResult.error) {
-      res.status(400).send({message: validationResult.error.details[0].message});
-      return;
+exports.update = function (req, res) {
+  let validationResult = baseValidator.validate(req.body);
+  if (validationResult.error) {
+    return res.status(400).send({ message: validationResult.error.details[0].message });
+  }
+
+  var updateData = req.users;
+  var admin_id = 0;
+  var superadmin_id = 0;
+
+  db.groups.findAll({
+    attributes: ['id', 'code'], where: { code: { [Op.in]: ['admin', 'superadmin'] } }
+  }).then(function (groups) {
+    if (groups && groups.length > 0) {
+      for (var i = 0; i < groups.length; i++) {
+        if (groups[i].code === 'admin') admin_id = groups[i].id;
+        else superadmin_id = groups[i].id;
+      }
+
+      if ((req.token.role !== 'admin' && req.token.role !== 'superadmin') && ((updateData.group_id === superadmin_id || updateData.group_id === admin_id) || (updateData.company_id !== req.token.company_id))) {
+        return res.status(400).send({ message: 'You cannot update users above your hierarchy or of another company' }); //normal user trying to update outside his company or above his hierarchy
+      } else if ((req.token.role === 'admin') && ((updateData.group_id === superadmin_id) || (updateData.company_id !== req.token.company_id))) {
+        return res.status(400).send({ message: 'You cannot update users above your hierarchy or of another company' }); //admin trying to update the superadmin or outside his company
+      } else {
+        updateData.update(req.body).then(function (result) {
+          res.json(result);
+        }).catch(function (err) {
+          winston.error("Updating user failed with error: ", err);
+          return res.status(400).send({ message: errorHandler.getErrorMessage(err) });
+        });
+      }
+    } else {
+      return res.status(400).send({ message: "Failed checking the user's authorization to perform this action" });
     }
-
-    var updateData = req.users;
-
-    var admin_id = 0;
-    var superadmin_id = 0;
-
-    db.groups.findAll({
-        attributes: ['id', 'code'], where: {code: {$in: ['admin', 'superadmin']}}
-    }).then(function(groups){
-        if(groups && groups.length >0){
-            for(var i=0; i<groups.length; i++){
-                if(groups[i].code === 'admin') admin_id = groups[i].id;
-                else superadmin_id = groups[i].id;
-            }
-
-            if( (req.token.role!=='admin' && req.token.role!=='superadmin') && ( (updateData.group_id===superadmin_id || updateData.group_id===admin_id) || (updateData.company_id!==req.token.company_id) ) ){
-                return res.status(400).send({message: 'You cannot update users above your hierarchy or of another company'}); //normal user trying to update outside his company or above his hierarchy
-            }
-            else if( (req.token.role==='admin') && ( (updateData.group_id===superadmin_id) || (updateData.company_id!==req.token.company_id) ) ){
-                return res.status(400).send({message: 'You cannot update users above your hierarchy or of another company'}); //admin trying to update the superadmin or outside his company
-            }
-            else{
-                updateData.updateAttributes(req.body).then(function(result) {
-                    res.json(result);
-                }).catch(function(err) {
-                    winston.error("Updating user failed with error: ", err);
-                    return res.status(400).send({message: errorHandler.getErrorMessage(err)});
-                });
-                return null;
-            }
-        }
-        else {
-            return res.status(400).send({message: "Failed checking the user's authorization to perform this action"});
-        }
-    }).catch(function(){
-        winston.error("Updating user failed with error: ", err);
-        return res.status(400).send({message: errorHandler.getErrorMessage(err)});
-    });
+  }).catch(function (err) {
+    winston.error("Updating user failed with error: ", err);
+    return res.status(400).send({ message: errorHandler.getErrorMessage(err) });
+  });
 };
 
 /**
@@ -236,14 +232,14 @@ exports.delete = function(req, res) {
     var superadmin_id = 0;
 
     db.groups.findAll({
-        attributes: ['id', 'code'], where: {code: {$in: ['admin', 'superadmin']}}
+        attributes: ['id', 'code'], where: {code: {[Op.in]: ['admin', 'superadmin']}}
     }).then(function(groups){
         if(groups && groups.length >0){
             for(var i=0; i<groups.length; i++){
                 if(groups[i].code === 'admin') admin_id = groups[i].id;
                 else superadmin_id = groups[i].id;
             }
-            DBModel.findById(deleteData.id).then(function(result) {
+            DBModel.findByPk(deleteData.id).then(function(result) {
                 if (result) {
                     if( (req.token.role!=='admin' && req.token.role!=='superadmin') && ( (req.users.group_id===superadmin_id || req.users.group_id===admin_id) || (req.users.company_id!==req.token.company_id) ) ){
                         return res.status(400).send({message: 'You cannot delete users above your hierarchy or of another company'}); //normal user trying to delete outside his company or above his hierarchy
@@ -289,13 +285,13 @@ exports.list = function(req, res) {
       query = req.query;
 
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.username = {};
-    qwhere.$or.username.$like = '%'+query.q+'%';
-    qwhere.$or.email = {};
-    qwhere.$or.email.$like = '%'+query.q+'%';
-    qwhere.$or.telephone = {};
-    qwhere.$or.telephone.$like = '%'+query.q+'%';
+    let filters = []
+    filters.push(
+      { username: { [Op.like]: `%${query.q}%` } },
+      { email: { [Op.like]: `%${query.q}%` } },
+      { telephone: { [Op.like]: `%${query.q}%` } },
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   //start building where
@@ -348,7 +344,7 @@ exports.dataByID = function(req, res, next, id) {
     });
   }
 
-  DBModel.find({
+  DBModel.findOne({
     where: {
       id: id
     },
@@ -381,7 +377,7 @@ exports.changepassword = function(req, res, next) {
 
   if (req.user) {
     if (passwordDetails.newPassword) {
-      User.findById(req.user.id, function(err, user) {
+      User.findByPk(req.user.id, function(err, user) {
         if (!err && user) {
           if (user.authenticate(passwordDetails.currentPassword)) {
             if (passwordDetails.newPassword === passwordDetails.verifyPassword) {
@@ -433,6 +429,11 @@ exports.changepassword = function(req, res, next) {
 };
 
 function validatePassword(val, helper) {
+  // check if password is a hashed value
+  if (val.length === 88 && Buffer.from(val, 'base64').toString('base64') === val) {
+    return true;
+  }
+
   if (val.length < 8) {
     return helper.message('Password must have at minimum 8 characters');
   }

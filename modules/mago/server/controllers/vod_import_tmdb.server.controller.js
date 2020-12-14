@@ -9,13 +9,15 @@ var path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     sequelize_t = require(path.resolve('./config/lib/sequelize')),
     DBModel = db.vod,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    request = require("request"),
+    querstring = require('querystring'),
     fs = require('fs'),
     winston = require(path.resolve('./config/lib/winston')),
     saas_functions = require(path.resolve('./custom_functions/saas_functions'));
-
-var download = require('download-file');
+const download = require('download');
+const axios = require('axios').default;
+const { Op } = require('sequelize');
+const { getStorage } = require('../../../../config/lib/storage_manager');
+const { downloadToStorage } = require('../../../../custom_functions/storage');
 
 function link_vod_with_genres(vod_id,array_category_ids, db_model, company_id) {
     var transactions_array = [];
@@ -27,7 +29,7 @@ function link_vod_with_genres(vod_id,array_category_ids, db_model, company_id) {
         {
             where: {
                 vod_id: vod_id,
-                category_id: {$notIn: array_category_ids},
+                category_id: {[Op.notIn]: array_category_ids},
                 company_id: company_id
             }
         }
@@ -62,7 +64,7 @@ function link_vod_with_packages(item_id, data_array, model_instance, company_id)
     var transactions_array = [];
     var destroy_where = (data_array.length > 0) ? {
         vod_id: item_id,
-        package_id: {$notIn: data_array},
+        package_id: {[Op.notIn]: data_array},
         company_id: company_id
     } : {
         vod_id: item_id,
@@ -98,7 +100,7 @@ function link_vod_with_packages(item_id, data_array, model_instance, company_id)
 /**
  * Create
  */
-exports.create = function(req, res) {
+exports.create = async (req, res) => {
     if(!req.body.clicks) req.body.clicks = 0;
     if(!req.body.duration) req.body.duration = 0;
     if (!req.body.original_title) req.body.original_title = req.body.title;
@@ -112,46 +114,42 @@ exports.create = function(req, res) {
     req.body.company_id = req.token.company_id; //save record for this company
     var limit = req.app.locals.backendsettings[req.token.company_id].asset_limitations.vod_limit;
 
-    if(!req.body.icon_url.startsWith("/files/vod/")) {
-        var origin_url_icon_url = 'https://image.tmdb.org/t/p/w500'+req.body.icon_url;
-        var destination_path_icon_url = "./public/files/vod/";
-        var vod_filename_icon_url = req.body.icon_url; //get name of new file
-        var options_icon_url = {
-            directory: destination_path_icon_url,
-            filename: vod_filename_icon_url
-        };
-        download(origin_url_icon_url, options_icon_url, function(err){
-            if (err){
-                winston.error("Error downloading tmdb image " + err);
-            }
-            else{
+    try {
+        let storage = await getStorage(req.token.company_id);
+
+        if(!req.body.icon_url.startsWith("/files/vod/")) {
+            var origin_url_icon_url = 'https://image.tmdb.org/t/p/w500'+req.body.icon_url;
+            var destination_path_icon_url = "files/vod";
+            var vod_filename_icon_url = req.body.icon_url; //get name of new file
+            
+            try {
+                await downloadToStorage(origin_url_icon_url, storage, destination_path_icon_url + vod_filename_icon_url);
                 winston.info("Success downloading tmdb image");
+            } catch (error) {
+                winston.error("Error downloading tmdb image ", error);
             }
-        });
-        // delete req.body.poster_path;
-        req.body.icon_url = '/files/vod'+vod_filename_icon_url;
+            // delete req.body.poster_path;
+            req.body.icon_url = '/files/vod'+vod_filename_icon_url;
+        }
+    
+        if(!req.body.image_url.startsWith("/files/vod/")) {
+            var origin_url_image_url = 'https://image.tmdb.org/t/p/original'+req.body.image_url;
+            var destination_path_image_url = "files/vod";
+            var vod_filename_image_url = req.body.image_url; //get name of new file
+            
+            try {
+                await downloadToStorage(origin_url_image_url, storage, destination_path_image_url + vod_filename_image_url);
+                winston.info("Success downloading tmdb image");
+            } catch (error) {
+                winston.error("Error downloading tmdb image ", error);
+            }
+            // delete req.body.backdrop_path;
+            req.body.image_url = '/files/vod'+vod_filename_image_url;
+        }
     }
-
-    if(!req.body.image_url.startsWith("/files/vod/")) {
-        var origin_url_image_url = 'https://image.tmdb.org/t/p/original'+req.body.image_url;
-        var destination_path_image_url = "./public/files/vod/";
-        var vod_filename_image_url = req.body.image_url; //get name of new file
-        var options = {
-            directory: destination_path_image_url,
-            filename: vod_filename_image_url
-        };
-        download(origin_url_image_url, options, function(err){
-            if (err){
-                winston.error("Error downloading tmdb image " + err);
-            }
-            else{
-                winston.info("Successfully downloaded tmdb image");
-            }
-        });
-        // delete req.body.backdrop_path;
-        req.body.image_url = '/files/vod'+vod_filename_image_url;
+    catch(err) {
+        winston.error("Failed accessing storage ", err);
     }
-
 
     saas_functions.check_limit('vod', req.token.company_id, limit).then(function(limit_reached){
         if(limit_reached === true) return res.status(400).send({message: "You have reached the limit number of vod items you can create for this plan. "});
@@ -193,91 +191,94 @@ exports.create = function(req, res) {
 /**
  * Show current
  */
-exports.read = function(req, res) {
-    const id = req.params.tmdbId
+exports.read = async (req, res) => {
+  const id = req.params.tmdbId
+  if (!(id % 1 === 0)) { //check if it's integer
+    return res.status(404).send({ message: 'Data is invalid' });
+  }
 
-    if (!(id % 1 === 0)) { //check if it's integer
-        return res.status(404).send({
-            message: 'Data is invalid'
-        });
+  const options = {
+    method: 'GET',
+    url: `https://api.themoviedb.org/3/movie/${id}?` + querstring.stringify({
+      language: 'en-US',
+      api_key: 'fe4104e791060715f23f1244a51b926a',
+      append_to_response: 'credits,videos'
+    })
+  };
+  try {
+    let response = await axios(options);
+    var b;
+    var starring_array = '';
+    for (b = 0; b < response.data.credits.cast.length; b++) {
+      starring_array += response.data.credits.cast[b].name + ',';
     }
+    //./get all starring/cast from tmdb
 
-    var options = { method: 'GET',
-        url: 'https://api.themoviedb.org/3/movie/'+id,
-        qs:
-            { language: 'en-US',
-                api_key: 'fe4104e791060715f23f1244a51b926a',
-                append_to_response: 'credits,videos'
-            }
-    };
+    //get director from tmdb
+    var c;
+    var director_array = '';
+    for (c = 0; c < response.data.credits.crew.length; c++) {
 
+      if (response.data.credits.crew[c].job === 'Director')
+        director_array += response.data.credits.crew[c].name;
+    }
+    //./get director from tmdb
 
-    request(options, function (error, response, body) {
-        if (error) throw new Error(error);
-        let res_data = JSON.parse(body);
+    //get trailer url
+    if (response.data.videos.results.length > 0) {
+      response.data.trailer_url = 'https://www.youtube.com/watch?v=' + response.data.videos.results[0].key;
+    } else {
+      response.data.trailer_url = '';
+    }
+    //./get trailer url
 
-        //get all starring/cast from tmdb
-        var b;
-        var starring_array = '';
-        for (b = 0; b < res_data.credits.cast.length; b++ ){
-            starring_array += res_data.credits.cast[b].name+',';
-        }
-        //./get all starring/cast from tmdb
+    response.data.description = response.data.overview; delete response.data.overview;
+    response.data.duration = response.data.runtime; delete response.data.runtime;
+    response.data.adult_content = response.data.adult; delete response.data.adult;
+    response.data.icon_url = response.data.poster_path; delete response.data.poster_path;
+    response.data.image_url = response.data.backdrop_path; delete response.data.backdrop_path;
+    response.data.starring = starring_array; delete response.data.credits;
+    response.data.director = director_array;
 
-        //get director from tmdb
-        var c;
-        var director_array = '';
-        for (c = 0; c < res_data.credits.crew.length; c++ ){
-
-            if (res_data.credits.crew[c].job === 'Director')
-                director_array += res_data.credits.crew[c].name;
-        }
-        //./get director from tmdb
-
-        //get trailer url
-        if(res_data.videos.results.length > 0){
-            res_data.trailer_url = 'https://www.youtube.com/watch?v='+res_data.videos.results[0].key;
-        }else {
-            res_data.trailer_url = '';
-        }
-        //./get trailer url
-
-        res_data.description = res_data.overview; delete res_data.overview;
-        res_data.duration = res_data.runtime; delete res_data.runtime;
-        res_data.adult_content = res_data.adult; delete res_data.adult;
-        res_data.icon_url = res_data.poster_path; delete res_data.poster_path;
-        res_data.image_url = res_data.backdrop_path; delete res_data.backdrop_path;
-        res_data.starring = starring_array; delete res_data.credits;
-        res_data.director = director_array;
-
-
-        res.send(res_data);
-        // next(res_data)
+    res.send(response.data);
+  } catch (error) {
+    winston.error("There has been an error getting tmdb of movie, check tmdb token", error);
+    return res.status(500).send({
+      status: 500,
+      message: "There has been an error getting tmbd of movie, check tmbd token"
     });
+  }
 };
 
 
-exports.list = function(req, res) {
-    var query = req.query;
-    var page = query.page || 1;
+exports.list = async (req, res) => {
+  let query = req.query;
+  let page = query.page || 1;
 
-    if(parseInt(query._start)) page = parseInt(query._start);
+  if (!query.q) {
+      res.json([]);
+      return;
+  }
 
-    const options = {
-        method: 'GET',
-        url: 'https://api.themoviedb.org/3/search/movie',
-        qs: {
-            page: page,
-            query: query.q,
-            api_key: 'fe4104e791060715f23f1244a51b926a',
-            language: "en-US"
-        }
-    };
+  if (parseInt(query._start)) page = parseInt(query._start);
 
-    request(options, function (error, response, body) {
-        if (error) throw new Error(error);
-        let res_data = JSON.parse(body);
-        // res.setHeader("X-Total-Count", res_data.total_results);
-        res.send(res_data.results);
+  const options = {
+    method: 'GET',
+    url: 'https://api.themoviedb.org/3/search/movie?' + querstring.stringify({
+      page: page,
+      query: query.q,
+      api_key: 'fe4104e791060715f23f1244a51b926a',
+      language: "en-US"
+    })
+  };
+  try {
+    let response = await axios(options)
+    res.send(response.data.results);
+  } catch (error) {
+    winston.error("There has been an error getting tmdb list of movies, check tmdb token", error);
+    return res.status(500).send({
+      status: 500,
+      message: "There has been an error getting tmbd list of movies, check tmbd token"
     });
+  }
 };

@@ -26,7 +26,4 @@ module.exports = function(app) {
     app.route('/api/CustomerAccount/:customerId')
         .all(policy.Authenticate)
         .put(customer_account.updateClient);
-
-    // app.param('customerId', customer_account.dataByID);
-
 };

@@ -6,10 +6,14 @@
 const path = require('path'),
   errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
   winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.devices,
-  geoip = require(path.resolve('./modules/geoip/server/controllers/geoip_logic.server.controller.js'));
-
+  db = require(path.resolve('./config/lib/sequelize')),
+  models = db.models,
+  geoip = require(path.resolve('./modules/geoip/server/controllers/geoip_logic.server.controller.js')),
+  vmx = require('../../../vmx/lib/vmx'),
+  sequelize = require(path.resolve('./config/lib/sequelize')).sequelize,
+  response = require(path.resolve('./config/responses'));
+const Joi = require("joi");
+const { Op } = require('sequelize');
 const escape = require(path.resolve('./custom_functions/escape'));
 
 /**
@@ -18,7 +22,7 @@ const escape = require(path.resolve('./custom_functions/escape'));
 exports.create = function (req, res) {
   req.body.company_id = req.token.company_id; //save record for this company
 
-  DBModel.create(req.body).then(function (result) {
+  models.devices.create(req.body).then(function (result) {
     if (!result) {
       return res.status(400).send({message: 'fail create data'});
     } else {
@@ -36,68 +40,104 @@ exports.create = function (req, res) {
  * Show current
  */
 exports.read = function (req, res) {
-  if (req.genre.company_id === req.token.company_id) res.json(req.genre);
-  else return res.status(404).send({message: 'No data with that identifier has been found'});
+  res.json(req.device);
 };
 
 /**
  * Update
  */
-exports.update = function (req, res) {
-  var updateData = req.genre;
-
-  if (req.genre.company_id === req.token.company_id) {
-    updateData.updateAttributes(req.body).then(function (result) {
-      res.json(result);
-      return null;
-    }).catch(function (err) {
-      winston.error("Updating device failed with error: ", err);
-      res.status(400).send({
-        message: errorHandler.getErrorMessage(err)
+exports.update = async (req, res) => {
+  try {
+    const t = await sequelize.transaction();
+    try {
+      const findDevice = await models.devices.findOne({
+        include: [{
+          model: models.device_mediaplayer,
+          include: [{
+            model: models.media_player
+          }]
+        }],
+        where: {
+          id: req.params.deviceId,
+          company_id: req.token.company_id
+        }
       });
-      return null;
-    });
-  } else {
-    res.status(404).send({message: 'User not authorized to access these data'});
+      if (!findDevice) {
+        return res.status(404).send({ message: 'No data with that identifier has been found!' });
+      }
+      await findDevice.update(req.body, { transaction: t })
+      // commented when media player is not implemented yet on UI
+      /* await models.device_mediaplayer.update({
+        mediaplayer_id: req.body.device_mediaplayer.media_player.id
+      }, {
+        where: { device_id: findDevice.id },
+        transaction: t
+      }); */
+      await t.commit();
+      res.json(findDevice);
+    } catch (error) {
+      winston.error("Updating device failed with error: ", error);
+      await t.rollback();
+      res.status(500).send({ message: errorHandler.getErrorMessage(error) });
+    }
+  } catch (err) {
+    winston.error("Error initiation transaction: ", err);
+    res.status(500).send({ message: errorHandler.getErrorMessage(err) });
   }
-
-
 };
 
 /**
  * Delete
  */
-exports.delete = function (req, res) {
-  var deleteData = req.genre;
-
-  DBModel.findById(deleteData.id).then(function (result) {
-    if (result) {
-      if (result && (result.company_id === req.token.company_id)) {
-        result.destroy().then(function () {
-          return res.json(result);
-        }).catch(function (err) {
-          winston.error("Deleting device failed with error: ", err);
-          return res.status(400).send({
-            message: errorHandler.getErrorMessage(err)
-          });
-        });
-      } else {
-        return res.status(400).send({message: 'Unable to find the Data'});
-      }
-    } else {
-      return res.status(400).send({
-        message: 'Unable to find the Data'
-      });
+exports.delete = async function (req, res) {
+  try {
+    if (req.device.vmx_id) {
+      let vmxClient = vmx.getClient(req.token.company_id);
+      await vmxClient.deleteDevice(req.device.vmx_id);
     }
-    return null;
-  }).catch(function (err) {
-    winston.error("Finding device failed with error: ", err);
+
+    await req.device.destroy();
+
+    res.json(req.device);
+  } 
+  catch(err) {
+    winston.error('Failed to delete device to vmx');
     return res.status(400).send({
       message: errorHandler.getErrorMessage(err)
     });
-  });
-
+  }
 };
+
+exports.deleteOld = async function(req, res) {
+ if (!req.query.older_than_years) {
+    res.status(400).send({message: 'The Older than field was empty'});
+    return;
+  }
+
+  let olderThanYears = parseInt(req.query.older_than_years);
+
+      let date = new Date();
+      date.setFullYear(date.getFullYear() - olderThanYears, date.getMonth(), date.getDate());
+
+      try {
+        await models.devices.destroy({
+          where: {
+            company_id: req.token.company_id,
+            updatedAt: {
+              [Op.lte]: date
+            }
+          }
+        });
+
+        res.json({message: 'Old devices were deleted successfully'})
+      }
+      catch(err) {
+        winston.error('Failed to delete old devices');
+        return res.status(400).send({
+          message: errorHandler.getErrorMessage(err)
+        });
+      }
+}
 
 /**
  * List
@@ -111,27 +151,29 @@ exports.list = function (req, res) {
   const company_id = req.token.company_id || 1;
 
   if (query.q) {
-    qwhere.$or = {};
-    qwhere.$or.username = {};
-    qwhere.$or.username.$like = '%' + query.q + '%';
-    qwhere.$or.device_id = {};
-    qwhere.$or.device_id.$like = '%' + query.q + '%';
-    qwhere.$or.device_ip = {};
-    qwhere.$or.device_ip.$like = '%' + query.q + '%';
-    qwhere.$or.device_brand = {};
-    qwhere.$or.device_brand.$like = '%' + query.q + '%';
-    qwhere.$or.device_mac_address = {};
-    qwhere.$or.device_mac_address.$like = '%' + query.q + '%';
-    qwhere.$or.os = {};
-    qwhere.$or.os.$like = '%' + query.q + '%';
+    let filters = []
+    filters.push(
+      { username: { [Op.like]: `%${query.q}%` } },
+      { device_id: { [Op.like]: `%${query.q}%` } },
+      { device_ip: { [Op.like]: `%${query.q}%` } },
+      { device_brand: { [Op.like]: `%${query.q}%` } },
+      { device_mac_address: { [Op.like]: `%${query.q}%` } },
+      { os: { [Op.like]: `%${query.q}%` } },
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   final_where.where = qwhere;
   if (parseInt(query._start)) final_where.offset = parseInt(query._start);
   if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
-  final_where.include = [];
+  final_where.include = [{
+    model: models.device_mediaplayer,
+    include: [{
+      model: models.media_player
+    }]
+  }];
 
   if (query.login_data_id) qwhere.login_data_id = query.login_data_id;
   if (query.appid) qwhere.appid = query.appid;
@@ -144,7 +186,7 @@ exports.list = function (req, res) {
 
   final_where.where.company_id = company_id; //return only records for this company
 
-  DBModel.findAndCountAll(
+  models.devices.findAndCountAll(
     final_where
   ).then(function (results) {
     if (!results) {
@@ -180,37 +222,47 @@ exports.list = function (req, res) {
   });
 };
 
+
+/**
+ * Remove
+ */
+exports.deleteByYear = function(req, res) {
+
+    var result = [1, 2, 3];
+    response.send_res(req, res, result, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'private,max-age=7200');
+
+};
+
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
-
+exports.dataByID = function (req, res, next) {
+  let id = req.params.deviceId;
   if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
+    return res.status(400).send({ message: 'Data is invalid' });
   }
 
-  DBModel.find({
+  models.devices.findOne({
+    include: [{
+      model: models.device_mediaplayer,
+      include: [{
+        model: models.media_player
+      }]
+    }],
     where: {
-      id: id
+      id: id,
+      company_id: req.token.company_id
     },
-    include: []
   }).then(function (result) {
     if (!result) {
-      res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-      return null;
-    } else {
-      req.genre = result;
-      next();
-      return null;
+      return res.status(404).send({ message: 'No data with that identifier has been found' });
     }
+    req.device = result;
+    next();
   }).catch(function (err) {
     winston.error("Getting device data failed with error: ", err);
-    next(err);
-    return null;
+    return res.status(500).send({ message: errorHandler.getErrorMessage(err) });
   });
-
 };
+
+

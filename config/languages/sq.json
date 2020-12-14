@@ -64,6 +64,12 @@
     "THUMBDOWN": "Mos pëlqe",
     "COMING_SOON": "Së shpejti",
     "CHANNEL_NOT_FOUND" : "Kanali nuk u gjet",
-    "USER_PARAMETER_MISSING": "Parametri username mungon"
+    "USER_PARAMETER_MISSING": "Parametri username mungon",
+    "APP_VERSION_DEPRECREATED_DESCRIPTION": "APP_VERSION_DEPRECREATED",
+    "APP_VERSION_DEPRECREATED": "Ky version i aplikacionit nuk mbeshtetet me",
+    "FEED_ERROR_DESCRIPTION": "GABIMI_I_MARRJES_SË_LAJMEVE",
+    "FEED_ERROR_DATA": "Gabim gjatë lidhjes me burimet e lajmeve",
+    "COMPANY_NOT_FOUND_DATA": "Nuk u gjet kompania me id e specifikuar",
+    "COMPANY_NOT_FOUND_DESCRIPTION": "COMPANY_NOT_FOUND_DESCRIPTION"
   }
 }

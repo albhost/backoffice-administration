@@ -38,6 +38,7 @@ export default function (nga, admin) {
 	combopackages.creationView()
 		.onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function(progression, notification, $state, entry, entity) {
             progression.done();
+            notification.log(`Package linked successfully`, { addnCls: 'humane-flatty-success' });
             $state.go($state.get('edit'), { entity: 'Combos', id: entry.values.combo_id });
             return false;
         }])

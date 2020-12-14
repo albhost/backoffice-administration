@@ -1,13 +1,13 @@
 'use strict';
 const path = require('path'),
-  WooCommerce = require('woocommerce-api'),
   db = require(path.resolve('./config/lib/sequelize')).models,
   subscriptionFunctions = require(path.resolve('./custom_functions/sales.js')),
   customerFunctions = require(path.resolve('./custom_functions/customer_functions.js')),
   authenticationHandler = require(path.resolve('./modules/deviceapiv2/server/controllers/authentication.server.controller')),
   winston = require(path.resolve('./config/lib/winston')),
   crypto = require('crypto');
-
+const { Op } = require('sequelize');
+const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 
 /*
 * @api {post} /apiv2/woocommerce/order_status_completed Woocommerce webhook
@@ -24,8 +24,7 @@ exports.woocommerce_order_status_change = function (req, res) {
     consumerKey: 'YOUR KEY HERE', //todo: read from settings
     consumerSecret: 'YOUR KEY HERE' //todo: read from settings
   });
-
-  wooCommerce.getAsync('orders/' + req.body.arg)
+  api.get('orders/' + req.body.arg)
     .then(function (result) {
 
       if (result.statusCode === 403) {
@@ -75,7 +74,7 @@ exports.woocommerce_order_status_change = function (req, res) {
               if (customer_data.status) {
                 return db.combo.findOne({
                   where: {
-                    $or: {product_id: thisorder.sku, name: thisorder.product_name},
+                    [Op.or]: [{product_id: thisorder.sku}, {name: thisorder.product_name}],
                     isavailable: true
                   },
                   //include: [{model: db.customer_data}]

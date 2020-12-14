@@ -3,19 +3,15 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
-    winston = require('winston'),
+    winston = require('../../../../config/lib/winston'),
     subscriptionFunctions = require(path.resolve('./custom_functions/sales.js')),
     crypto = require("crypto"),
-    moment = require('moment'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.subscription,
-    Combo = db.combo,
-    LoginData = db.login_data,
-    SalesData = db.salesreport,
-    eventSystem = require(path.resolve("./config/lib/event_system.js"));
+    Joi = require("joi");
 
 
 /**
@@ -85,7 +81,7 @@ exports.update = function (req, res) {
     var updateData = req.subscription;
 
     if (req.subscription.company_id === req.token.company_id) {
-        updateData.updateAttributes(req.body).then(function (result) {
+        updateData.update(req.body).then(function (result) {
             logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'update sub', JSON.stringify(req.body));
             return res.json(result);
         }).catch(function (err) {
@@ -105,7 +101,7 @@ exports.update = function (req, res) {
 exports.delete = function (req, res) {
     var deleteData = req.subscription;
 
-    DBModel.findById(deleteData.id).then(function (result) {
+    DBModel.findByPk(deleteData.id).then(function (result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function () {
@@ -147,17 +143,15 @@ exports.list = function (req, res) {
     if (parseInt(query._end)) var records_limit = parseInt(query._end) - parseInt(query._start);
 
     if (query.q) {
-        user_qwhere.$or = {};
-        user_qwhere.$or.username = {};
-        user_qwhere.$or.username.$like = '%' + query.q + '%';
+        user_qwhere = Object.assign(user_qwhere, { [Op.or]: { username: { [Op.like]: `%${query.q}%` } } })
     }
 
     qwhere.company_id = req.token.company_id; //return only records for this company
 
     DBModel.findAndCountAll({
         where: qwhere,
-        order: 'login_id DESC',
         include: [{model: db.login_data, where: user_qwhere, required: true}, {model: db.package, required: true}],
+        order: [['login_id', 'DESC']],
         offset: offset_start,
         limit: records_limit
     }).then(function (results) {
@@ -179,17 +173,20 @@ exports.list = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
+exports.dataByID = function (req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.subscriptionId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
+            id: value
         },
         include: [{model: db.login_data}, {model: db.package}]
     }).then(function (result) {
@@ -204,7 +201,9 @@ exports.dataByID = function (req, res, next, id) {
         }
     }).catch(function (err) {
         winston.error("Finding subscription data failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting  my subscription data'
+        });
     });
 
 };

@@ -45,12 +45,12 @@ export default function (nga, admin) {
                     return value.length > 25 ? value.substr(0, 25) + '...' : value;
                 })
                 .label('Token Url'),
-            nga.field('encryption_url', 'string')
-                .label('Encryption Url'),
+   /*         nga.field('encryption_url', 'string')
+                .label('Encryption Url'),*/
             nga.field('token', 'boolean')
                 .label('Token'),
-            nga.field('encryption', 'boolean')
-                .label('Encryption'),
+/*            nga.field('encryption', 'boolean')
+                .label('Encryption'),*/
             nga.field('stream_format', 'choice')
                 .choices([
                     { value: 0, label: 'MPEG Dash' },
@@ -139,7 +139,9 @@ export default function (nga, admin) {
                 .choices([
                     { value: 'none', label: 'None' },
                     { value: 'wowza', label: 'Wowza' },
-                    { value: 'flussonic', label: 'Flussonic' }
+                  { value: 'flussonic', label: 'Flussonic' },
+                  { value: 'nimble_timeshift', label: 'Nimble Timeshift' },
+                  { value: 'nimble_dvr', label: 'Nimble DVR' }
                 ])
                 .validation({validator: function(value) {
                         if(value === null || value === ''){
@@ -161,10 +163,11 @@ export default function (nga, admin) {
                     { value: 4, label: 'Android Smart TV' },
                     { value: 5, label: 'Samsung Smart TV' },
                     { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
-
+                  {value: 7, label: 'Web Smart TV'},
+                  {value: 8, label: 'Web App'},
+                    {value: 9, label: 'Roku TV'}
                 ])
-                .defaultValue([1,2,3,4,5,6])
+                .defaultValue([1,2,3,4,5,6,7,8,9])
                 .validation({validator: function(value) {
                         if(value === null || value === ''){
                             throw new Error('Please Select Stream resolution');
@@ -197,19 +200,20 @@ export default function (nga, admin) {
                 .defaultValue('Token Url')
                 .validation({ required: false })
                 .label('Token Url'),
-            nga.field('encryption', 'boolean')
+  /*          nga.field('encryption', 'boolean')
                 .attributes({ placeholder: 'Encryption' })
                 .validation({ required: true })
                 .label('Encryption'),
             nga.field('encryption_url', 'string')
                 .defaultValue('Encryption url')
                 .validation({ required: false })
-                .label('Encryption Url'),
+                .label('Encryption Url'),*/
             nga.field('drm_platform', 'choice')
                 .attributes({ placeholder: 'Select from dropdown list' })
                 .defaultValue('none')
                 .choices([
                     { value: 'none', label: 'None' },
+                    { value: 'encryption', label: 'Internal AES Encryption'},
                     { value: 'pallycon', label: 'Pallycon' },
                     { value: 'verimatrix', label: 'Verimatrix' },
                     { value: 'widevine', label: 'Widevine' }
@@ -221,6 +225,45 @@ export default function (nga, admin) {
                     }
                 })
                 .label('DRM Platform *'),
+
+            nga.field('encryption_url')
+                .label('Key Delivery URL')
+                .defaultValue('')
+                .validation({ required: false })
+                .template('<ma-field ng-if="entry.values.drm_platform === \'encryption\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+            nga.field('encryption_url')
+                .label('Key Delivery URL')
+                .defaultValue('')
+                .validation({ required: false })
+                .template('<ma-field ng-if="entry.values.drm_platform === \'widevine\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+            nga.field('vmx_content_id')
+                .template('<ma-field ng-if="entry.values.drm_platform === \'verimatrix\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+            nga.field('vmx_asset_id')
+                .template('<ma-field ng-if="entry.values.drm_platform === \'verimatrix\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+
+            nga.field('encryption', 'boolean')
+                .defaultValue(0)
+                .validation({ required: false })
+                .cssClasses('hidden')
+                .label('')
+                .map(function (value, entry) {
+                    if (!entry['encryption_url']) {
+                        return false;
+
+                    }
+                    else return true;
+                }),
+
+            nga.field('thumbnail_url', 'string')
+                .defaultValue('')
+                .attributes({ placeholder: 'Thumbnail URL' })
+                .validation({ required: false })
+                .label('Thumbnail URL'),
+
             nga.field('template')
                 .label('')
                 .template(edit_button),

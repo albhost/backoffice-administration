@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.vod_stream,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js'))
+    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
+    Joi = require("joi");
 /**
  * Create
  */
@@ -46,7 +47,7 @@ exports.update = function(req, res) {
     req.body.stream_resolution = req.body.stream_resolution.toString(); //convert array into comma-separated string
 
     if(req.vodStream.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Failed updating vod_stream attributes, error: " + err);
@@ -67,7 +68,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.vodStream;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -132,16 +133,19 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.vodStreamId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
-        where: {id: id},
+    DBModel.findOne({
+        where: {id: value},
         include: [{model: db.vod_stream_source}, {model: db.vod}]
     }).then(function(result) {
         if (!result) {
@@ -156,7 +160,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Failed operation at dataById vod_stream, error: " + err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting vod stream data'
+        });
     });
 
 };

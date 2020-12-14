@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.app_group,
-  escape = require(path.resolve('./custom_functions/escape'));
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.app_group,
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
 
 /**
  * Create
@@ -42,7 +43,7 @@ exports.read = function(req, res) {
 exports.update = function(req, res) {
   var updateData = req.appgroups;
 
-  updateData.updateAttributes(req.body).then(function(result) {
+  updateData.update(req.body).then(function(result) {
     res.json(result);
   }).catch(function(err) {
     winston.error("Updating the app group failed with error: ", err);
@@ -58,7 +59,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.appgroups;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
 
       result.destroy().then(function() {
@@ -96,7 +97,7 @@ exports.list = function(req, res) {
   final_where.where = qwhere;
   if(parseInt(query._start)) final_where.offset = parseInt(query._start);
   if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
   final_where.include = [];
   //end build final where
 
@@ -123,32 +124,35 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function (req, res, next) {
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.appgroupID);
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
 
-  DBModel.find({
-    where: {
-      id: id
-    },
-    include: []
-  }).then(function(result) {
-    if (!result) {
-      return res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-    } else {
+    DBModel.findOne({
+        where: {
+            id: value
+        }
+    }).then(function (result) {
+        if (!result) {
+            return res.status(404).send({
+                message: 'No data with that identifier has been found'
+            });
+        } else {
       req.appgroups = result;
       next();
       return null;
     }
   }).catch(function(err) {
     winston.error("Finding specific app group failed with error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting app group data'
+      });
   });
 
 };

@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     db = require(path.resolve('./config/lib/sequelize')),
     winston = require('winston'),
     DBModel = db.models.logs,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js'));
+    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
+    Joi = require("joi");
 
 /**
  * Create
@@ -61,7 +62,7 @@ exports.update = function(req, res) {
     var updateData = req.logs;
 
     if(req.logs.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             return res.jsonp(result);
             res.json(result);
         }).catch(function(err) {
@@ -83,7 +84,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.logs;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -155,17 +156,20 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.logId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
+            id: value
         },
         include: [{model: db.models.users, required: true, attributes: ['username']}]
     }).then(function(result) {
@@ -180,8 +184,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Getting log failed with error: ", err);
-        next(err);
-        return null;
+        return res.status(500).send({
+            message: 'Error at getting logs data'
+        });
     });
 
 };

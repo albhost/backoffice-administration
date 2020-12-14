@@ -18,7 +18,7 @@ const path = require('path'),
     devices = db.devices,
     mail  = require(path.resolve("custom_functions/mail.js")),
     moment = require('moment');
-
+const { Op } = require('sequelize');
 const winston = require('winston');
 
 /**
@@ -29,7 +29,7 @@ exports.renderPasswordForm = function (req, res) {
     where: {
       resetPasswordToken: req.params.token,
       resetPasswordExpires: {
-        $gt: new Date().toISOString()
+        [Op.gt]: new Date().toISOString()
       }
     }
   }).then(function (user) {
@@ -66,7 +66,7 @@ exports.resetForgottenPassword = function (req, res) {
     where: {
       resetPasswordToken: token,
       resetPasswordExpires: {
-        $gt: new Date().toISOString()
+        [Op.gt]: new Date().toISOString()
       }
     }
   }).then(function (user) {
@@ -135,7 +135,7 @@ exports.forgot = function(req, res, next) {
         function(done) {
             if (req.body.username) {
                 // Lookup user data by username
-                return login_data.find({
+                return login_data.findOne({
                     where: {
                         username: req.body.username.toLowerCase()
                     },

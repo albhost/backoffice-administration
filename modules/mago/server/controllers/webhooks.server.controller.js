@@ -8,9 +8,10 @@ const path = require('path'),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.webhooks,
-    logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
-    eventSystem = require(path.resolve("./config/lib/event_system.js"));
-
+    eventSystem = require(path.resolve("./config/lib/event_system.js")),
+    redis = require(path.resolve('./config/lib/redis')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 /**
  * Create
@@ -63,8 +64,10 @@ exports.create = function (req, res) {
                     },
                     {where: {id: result.id}}
                 ).then(function (result) {
+                    addWebhookLogs(req.token.id, 'update_whs', JSON.stringify(result), req.body.company_id)
+                    let redisMessage = req.token.company_id + ':' + event + ':subscribe';
+                    redis.client.publish('sync_webhook_event', redisMessage);
                     return res.jsonp(result);
-
                 })
             }
             return null;
@@ -80,6 +83,9 @@ exports.create = function (req, res) {
                 if (!result) {
                     return res.status(400).send({message: 'fail getting data'})
                 } else {
+                    addWebhookLogs(req.token.id, 'create_wh', JSON.stringify(result), req.body.company_id)
+                    let redisMessage = req.token.company_id + ':' + event + ':subscribe';
+                    redis.client.publish('sync_webhook_event', redisMessage);
                     return res.jsonp(result);
                 }
             }).catch(function (err) {
@@ -98,6 +104,19 @@ exports.create = function (req, res) {
     });
 };
 
+function addWebhookLogs(user_id, action, details, company_id) {
+    db.webhook_logs.create({
+        company_id: company_id,
+        user_id: user_id,
+        action: action,
+        details: details
+    }).then((result) => {
+        return null;
+    }).catch((err) => {
+        winston.error("Saving webhook logs failed with error: ", err);
+        return null;
+    });
+}
 
 /**
  * Show current
@@ -117,9 +136,7 @@ exports.list = function (req, res) {
         query = req.query;
 
     if (query.q) {
-        qwhere.$or = {};
-        qwhere.$or.title = {};
-        qwhere.$or.title.$like = '%' + query.q + '%';
+        qwhere = { [Op.or]: { title: { [Op.like]: `%${query.q}%` } } }
     }
 
     //start building where
@@ -127,7 +144,7 @@ exports.list = function (req, res) {
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
     if (query._orderBy) final_where.order = [[query._orderBy, query._orderDir]];
-    
+
     //end build final where
 
     final_where.where.company_id = 1; //return only records for this company
@@ -196,8 +213,10 @@ exports.update = function (req, res) {
                     },
                     {where: {id: result.id}}
                 ).then(function (result) {
+                    addWebhookLogs(req.token.id, 'update_wh', JSON.stringify(req.body), req.body.company_id)
+                    let redisMessage = req.token.company_id + ':' + event + ':subscribe';
+                    redis.client.publish('sync_webhook_event', redisMessage);
                     return res.jsonp(result);
-
                 })
             }
             return null;
@@ -219,10 +238,13 @@ exports.update = function (req, res) {
 exports.delete = function (req, res) {
     var deleteData = req.webhooks;
 
-    DBModel.findById(deleteData.id).then(function (result) {
+    DBModel.findByPk(deleteData.id).then(function (result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
+                addWebhookLogs(req.token.id, 'delete_wh', JSON.stringify(result), req.body.company_id)
                 result.destroy().then(function () {
+                    let redisMessage = req.token.company_id + ':' + result.events.join(',') + ':unsubscribe';
+                    redis.client.publish('sync_webhook_event', redisMessage);
                     return res.json(result);
                 }).catch(function (err) {
                     winston.error("Deleting webhooks failed with error: ", err);
@@ -259,17 +281,20 @@ exports.getEventTypes = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
+exports.dataByID = function (req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.webhooksId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
+            id: value
         }
     }).then(function (result) {
         if (!result) {
@@ -283,7 +308,9 @@ exports.dataByID = function (req, res, next, id) {
         }
     }).catch(function (err) {
         winston.error("Finding subscription data failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting webhooks data'
+        });
     });
 
 };

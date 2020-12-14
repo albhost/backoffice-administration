@@ -27,9 +27,9 @@ module.exports = function(app) {
     app.route('/api/systemmenu/:systemmenuId')
         .all(policy.Authenticate)
         //.all(policy.isAllowed)
+        .all(systemmenu.dataByID)
         .get(systemmenu.read)
         .put(systemmenu.update)
         .delete(systemmenu.delete);
 
-    app.param('systemmenuId', systemmenu.dataByID);
 };

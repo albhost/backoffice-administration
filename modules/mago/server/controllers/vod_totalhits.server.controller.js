@@ -5,11 +5,11 @@
  */
 var path = require('path'),
   errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-    winston = require('winston'),
+  winston = require('winston'),
   db = require(path.resolve('./config/lib/sequelize')).models,
   DBModel = db.vod,
   escape = require(path.resolve('./custom_functions/escape'));
-
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -42,7 +42,7 @@ exports.read = function(req, res) {
 exports.update = function(req, res) {
   var updateData = req.vod;
 
-  updateData.updateAttributes(req.body).then(function(result) {
+  updateData.update(req.body).then(function(result) {
     res.json(result);
   }).catch(function(err) {
     winston.error(err);
@@ -58,7 +58,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.vod;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
 
       result.destroy().then(function() {
@@ -88,25 +88,25 @@ exports.delete = function(req, res) {
  */
 exports.totalhits = function(req, res) {
 
-      var qwhere = {},
-      final_where = {},
-      query = req.query;
+  var qwhere = {},
+    final_where = {},
+    query = req.query;
 
-  if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.title = {};
-    qwhere.$or.title.$like = '%'+query.q+'%';
-    qwhere.$or.description = {};
-    qwhere.$or.description.$like = '%'+query.q+'%';
-    qwhere.$or.director = {};
-    qwhere.$or.director.$like = '%'+query.q+'%';
+  if (query.q) {
+    let filters = []
+    filters.push(
+      { title: { [Op.like]: `%${query.q}%` } },
+      { description: { [Op.like]: `%${query.q}%` } },
+      { director: { [Op.like]: `%${query.q}%` } },
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   //start building where
   final_where.where = qwhere;
   if(parseInt(query._start)) final_where.offset = parseInt(query._start);
   if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
   final_where.include = [db.vod_category, db.package];
   //end build final where
 
@@ -142,7 +142,7 @@ exports.dataByID = function(req, res, next, id) {
     });
   }
 
-  DBModel.find({
+  DBModel.findOne({
     where: {
       id: id
     },

@@ -22,11 +22,9 @@ module.exports = function(app) {
     app.route('/api/packagetypes/:packageTypeId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(packageTypes.dataByID)
         .get(packageTypes.read)
         .put(packageTypes.update)
         .delete(packageTypes.delete);
-
-    app.param('packageTypeId', packageTypes.dataByID);
-
 
 };

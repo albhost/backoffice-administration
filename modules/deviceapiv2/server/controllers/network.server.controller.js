@@ -6,12 +6,15 @@
  **/
 
 'use strict';
-var path = require('path'),
+const path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')),
     response = require(path.resolve("./config/responses.js")),
     querystring = require("querystring"),
     models = db.models;
-var winston = require('winston');
+const winston = require('winston');
+
+const getClientIP = require(path.resolve('./custom_functions/getClientIP'))
+
 
 //makes a database call. returns database_error if connection failed, one genre_id otherwise
 
@@ -71,7 +74,7 @@ exports.gcm = function(req, res) {
 		upsertDevice({
 			googleappid           : decodeURIComponent(req.body.google_app_id),
 			device_id             : auth_obj.boxid,
-			device_ip             : req.ip.replace('::ffff:', ''),
+			device_ip             : getClientIP(req),
 			device_mac_address    : (req.body.ntype == '2') ? decodeURIComponent(req.body.macaddress) : '',
 			device_wifimac_address: (req.body.ntype == '1') ? decodeURIComponent(req.body.macaddress) : '',
 			ntype                 : req.body.ntype,
@@ -98,7 +101,7 @@ exports.gcm = function(req, res) {
 		upsertDevice({
 			googleappid           : decodeURIComponent(req.body.google_app_id),
 			device_id             : req.auth_obj.boxid,
-			device_ip             : req.ip.replace('::ffff:', ''),
+			device_ip             : getClientIP(req),
 			device_mac_address    : (req.body.ntype == '2') ? decodeURIComponent(req.body.macaddress) : '',
 			device_wifimac_address: (req.body.ntype == '1') ? decodeURIComponent(req.body.macaddress) : '',
 			ntype                 : req.body.ntype,

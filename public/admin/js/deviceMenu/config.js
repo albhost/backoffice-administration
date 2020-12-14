@@ -3,7 +3,7 @@ import edit_button from '../edit_button.html';
 
 export default function (nga, admin) {
 	var devicemenu = admin.getEntity('DeviceMenus');
-	var appids = {1: 'Android Set Top Box', 2: 'Android Smart Phone',3: 'IOS', 4: 'Android Smart TV', 5: 'Samsung Smart TV', 6: 'Apple TV', 7: 'Web Smart TV'};
+	var appids = {1: 'Android Set Top Box', 2: 'Android Smart Phone',3: 'IOS', 4: 'Android Smart TV', 5: 'Samsung Smart TV', 6: 'Apple TV', 7: 'Web Smart TV', 8: 'Web App', 9:'Roku TV'};
 
 	devicemenu.listView()
 
@@ -175,7 +175,9 @@ export default function (nga, admin) {
                     { value: 4, label: 'Android Smart TV' },
                     { value: 5, label: 'Samsung Smart TV' },
 					          { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
+                    {value: 7, label: 'Web Smart TV'},
+                  {value: 8, label: 'Web App'},
+                    {value: 9, label: 'Roku TV'}
                 ])
                 .validation({validator: function(value) {
                         if(value === null || value === ''){
@@ -287,7 +289,9 @@ export default function (nga, admin) {
                     { value: 4, label: 'Android Smart TV' },
                     { value: 5, label: 'Samsung Smart TV' },
                     { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
+                    {value: 7, label: 'Web Smart TV'},
+                    {value: 8, label: 'Web App'},
+                    {value: 9, label: 'Roku TV'},
                 ])
                 .validation({validator: function(value) {
                         if(value === null || value === ''){

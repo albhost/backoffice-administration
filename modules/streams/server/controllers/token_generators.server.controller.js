@@ -1,10 +1,15 @@
 'use strict'
 var path = require('path'),
+    url = require('url'),
     response = require(path.resolve("./config/responses.js")),
     akamai_token_generator = require(path.resolve('./modules/streams/server/controllers/akamai_token_v2')),
     crypto = require('crypto'),
     responses = require(path.resolve("./config/responses.js")),
-    ectoken = require('ectoken').V3;
+    ectoken = require('ectoken').V3,
+    EdgeAuth = require('akamai-edgeauth');
+
+const responseHandler = require("../../../device-api-v4/server/utils/response");
+
 
 
 //nimble dateFormat function
@@ -335,6 +340,25 @@ exports.handleGenerateTokenJson = function(req, res) {
     res.send(resp);
 }
 
+exports.handleGenerateTokenJsonVerizonV4 = function(req, res) {
+    const token = generateECTokenV4(req);
+
+    res.status(200).json({ token: `?${token}` });
+}
+
+function generateECTokenV4(req) {
+    let config = req.app.locals.advanced_settings[req.auth.data.company_id].verizon;
+    let expireAt = Date.now() + config.window * 1000;
+    let ip = req.header('x-forwarded-for') || req.connection.remoteAddress;
+    ip = ip.replace('::ffff:', '');
+
+    let paramString = 'ec_expire=' + expireAt +
+      '&ec_proto_allow=' + config.proto_allowed +
+      '&ec_clientip=' + ip;
+
+    return ectoken.encrypt(config.key, paramString);
+}
+
 function generateECToken(req) {
     let config = req.app.locals.advanced_settings[req.authParams.companyId].verizon;
     let expireAt = Date.now() + config.window * 1000;
@@ -344,7 +368,7 @@ function generateECToken(req) {
     let paramString = 'ec_expire=' + expireAt + 
                         '&ec_proto_allow=' + config.proto_allowed +
                         '&ec_clientip=' + ip;
-                        
+
     let token = ectoken.encrypt(config.key, paramString);
     return token;
 }
@@ -398,5 +422,136 @@ exports.wowza_token_generator = function (req, res) {
 
 }
 
+/**
+ * @api {GET} /apiv2/token/akamai/edgeauth Generate akamai token with edgeauth module
+ * @apiName AkamaiEdgeAuth
+ * @apiGroup StreamTokens
+ * @apiParam (Query param) {String} stream_url Stream url
+ * @apiParam (Query param) {String} tokenName Name of the token
+ * @apiSuccessExample Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *           "status_code": 200,
+ *           "error_code": 1,
+ *           "timestamp": 1,
+ *           "error_description": "OK",
+ *           "extra_data": "tream url with token",
+ *           "response_object": []
+ *     }
+ */
+exports.handleGenerateAkamaiEdgeAuthToken = function(req, res) {
+    let streamUrl = req.query.stream_url;
+    if (!streamUrl) {
+        responses.send_res(req, res, [], 706, -1, 'BAD_REQUEST_DESCRIPTION', 'BAD_REQUEST_DATA', 'no-store');
+        return;
+    }
+    let tokenName = req.query.tokenName;
 
+    try {
+        let tokenConfig = req.app.locals.advanced_settings[req.authParams.companyId].akamai;
+        let pathName = url.parse(streamUrl).pathname;
 
+        let ip = req.header('x-forwarded-for') || req.connection.remoteAddress;
+        let token = generateAkamaiEdgeAuthToken(tokenConfig, tokenName, ip, pathName);
+        let urlWithToken = streamUrl + '?' + token;
+        let resp = new responses.OK();
+        resp.extra_data = urlWithToken;
+
+        res.send(resp);
+    } catch(e) {
+        responses.send_res(req, res, [], 706, -1, 'BAD_REQUEST_DESCRIPTION', 'BAD_REQUEST_DATA', 'no-store');
+    }
+}
+
+function generateAkamaiEdgeAuthToken(config, tokenName, ip, pathName) {
+    if (!tokenName) {
+        tokenName = '__token__';
+    }
+
+    let eaConfig = {
+        key: config.key,
+        windowSeconds: config.window,
+        tokenName: tokenName,
+        ip: ip,
+        escapeEarly: false
+    }
+
+    let ea = new EdgeAuth(eaConfig);
+    let token = ea.generateURLToken(pathName);
+    token = tokenName  + '=' + token;
+    return token;
+}
+
+exports.akamai_token_segment_media = function (req, res) {
+    var config = {
+        //algorithm : 'SHA256',
+        acl: '*',
+        window: req.app.locals.streamtokens.AKAMAISEGMENTMEDIA.WINDOW,
+        key: 'a26c3de57cc0ba8a30d862bf770ab4dd', //req.app.locals.streamtokens.AKAMAI.TOKEN_KEY,
+        //ip: getClientIp(req),
+        ip: req.ip.replace('::ffff:', ''),
+        startTime: 0,
+        url: '',
+        session: '',
+        data: req.auth_obj.username,
+        salt: req.app.locals.streamtokens.AKAMAISEGMENTMEDIA.SALT,
+        delimeter: '~',
+        escape_early: false,
+        name: 'hdnts'
+    };
+
+    var token = "?" + new akamai_token_generator.default(config).generateToken();
+    var theresponse = new responses.OK();
+    theresponse.extra_data = token;
+    res.send(theresponse);
+};
+
+exports.akamaiTokenSegmentMedia = function (req, res) {
+    const tokenConfig = req.app.locals.advanced_settings[req.auth.data.company_id].akamai_segment_media;
+
+    let config = {
+        //algorithm : 'SHA256',
+        acl: '*',
+        window: tokenConfig.window,
+        key: tokenConfig.key,
+        ip:  getClientIp(req),
+        startTime: 0,
+        url: '',
+        session: '',
+        data: req.auth.data.username,
+        salt: tokenConfig.salt,
+        delimeter: '~',
+        escape_early: false,
+        name: 'hdnts'
+    };
+
+    let token = "?" + new akamai_token_generator.default(config).generateToken();
+    responseHandler.sendData(req, res, { token })
+};
+
+exports.generateAkamaiEdgeAuthToken = generateAkamaiEdgeAuthToken;
+
+exports.akamaiTokenNimbleOrigin = function (req, res) {
+    const tokenConfig = req.app.locals.advanced_settings[req.auth.data.company_id].akamai;
+
+    const config = {
+        algorithm: 'SHA256',
+        acl: '*',
+        window: tokenConfig.window,
+        key: tokenConfig.key,
+        ip: getClientIp(req),
+        startTime: 0,
+        url: '',
+        session: '',
+        data: req.auth.data.username,
+        salt: req.app.locals.streamtokens.AKAMAI.SALT,
+        delimeter: '~',
+        escape_early: false,
+        name: 'wmsAuthSign'
+    };
+
+    const token = "?" + new akamai_token_generator.default(config).generateToken();
+
+    responseHandler.sendData(req, res, {token})
+
+};

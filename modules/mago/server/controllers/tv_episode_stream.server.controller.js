@@ -3,12 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.tv_episode_stream,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js'))
+    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
+    Joi = require("joi");
+
 /**
  * Create
  */
@@ -45,7 +47,7 @@ exports.update = function(req, res) {
     req.body.stream_resolution = req.body.stream_resolution.toString(); //convert array into comma-separated string
 
     if(req.tv_episodeStream.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Error updating tv episode stream, error: ",err);
@@ -66,7 +68,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.tv_episodeStream;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -133,15 +135,19 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
-     if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+exports.dataByID = function(req, res, next) {
+
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.tv_episode_stream_id);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
-        where: {id: id},
+    DBModel.findOne({
+        where: {id: value},
         include: [{model: db.vod_stream_source}, {model: db.tv_episode}]
     }).then(function(result) {
         if (!result) {
@@ -156,7 +162,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Error tv episode stream at dataById, error: ",err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting  tv episode stream data'
+        });
     });
 
 };

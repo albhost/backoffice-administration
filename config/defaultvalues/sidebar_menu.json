@@ -52,6 +52,13 @@
         "link": "/commands/create"
       },
       {
+        "id": 7,
+        "api_group_name": "banners",
+        "name": "banners",
+        "children": [],
+        "link": "/banners/create"
+      },
+      {
         "id": 8,
         "api_group_name": "notifications",
         "name": "notifications",

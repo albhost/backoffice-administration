@@ -3,14 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.vod_subtitles,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    fs = require('fs');
-
+    fs = require('fs'),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -52,7 +52,7 @@ exports.update = function(req, res) {
     }
 
     if(req.vodSubtitle.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             if(deletefile) {
                 fs.unlink(deletefile, function (err) {
                     //todo: return ome warning
@@ -78,7 +78,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.vodSubtitle;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -120,13 +120,14 @@ exports.list = function(req, res) {
     var qwhere = {};
     if(query.vod_id) qwhere.vod_id = query.vod_id;
 
-    if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.vod_id = {};
-    qwhere.$or.vod_id.$like = '%'+query.q+'%';
-    qwhere.$or.title = {};
-    qwhere.$or.title.$like = '%'+query.q+'%';
-  }
+    if (query.q) {
+        qwhere = Object.assign(qwhere, {
+            [Op.or]: [
+                { vod_id: { [Op.like]: `%${query.q}%` } },
+                { title: { [Op.like]: `%${query.q}%` } }
+            ]
+        })
+    }
     qwhere.company_id = req.token.company_id; //return only records for this company
 
   DBModel.findAndCountAll({
@@ -153,32 +154,46 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function (req, res, next) {
+    const COMPANY_ID = req.token.company_id || 1;
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.vodSubtitleId);
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
-
-  DBModel.find({
-    where: {
-      id: id
-    },
-    include: [{model: db.vod}]
-  }).then(function(result) {
-    if (!result) {
-      return res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-    } else {
-      req.vodSubtitle = result;
-      next();
-      return null
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
     }
-  }).catch(function(err) {
-      winston.error(err);
-    return next(err);
-  });
+
+    DBModel.findOne({
+        where: {
+            id: value
+        },
+        include: [{model: db.vod}]
+    }).then(function (result) {
+        if (!result) {
+            return res.status(404).send({
+                message: 'No data with that identifier has been found'
+            });
+        } else {
+            req.vodSubtitle = result;
+            let protocol = new RegExp('^(https?|ftp)://');
+            if (protocol.test(req.body.subtitle_url)) {
+                let url = req.body.subtitle_url;
+                let pathname = new URL(url).pathname;
+                req.body.subtitle_url = pathname;
+            } else {
+
+                req.vodSubtitle.subtitle_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.subtitle_url;
+            }
+            next();
+            return null
+        }
+    }).catch(function (err) {
+        winston.error(err);
+        return res.status(500).send({
+            message: 'Error at getting vod subtitles data'
+        })
+    });
 
 };

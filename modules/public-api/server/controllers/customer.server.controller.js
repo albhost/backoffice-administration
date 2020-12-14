@@ -6,6 +6,7 @@ var path = require('path'),
     customerFunctions = require(path.resolve('./custom_functions/customer_functions.js')),
     winston = require('winston');
 
+const { Sequelize } = require('sequelize');
 
 /**
  * @api {get} /api/public/customer Get Customer List
@@ -16,15 +17,16 @@ var path = require('path'),
  * @apiParam (Query params) {Number} Offset where start getting customers
  * @apiSuccess (200) {Object[]} data List of the customers
  * @apiSuccess {Number} id Id of the customer
- * @apiSuccess {String} customername Customername the of customer
+ * @apiSuccess {String} username Name the of customer
  * @apiSuccess {String} mac_address Mac address of the customer
  * @apiSuccess {Number} pin Pin of the customer
  * @apiSuccess {Boolean} show_adult Rights for adult channels
  * @apiSuccess {String} player Player name
  * @apiSuccess {Number} timezone Timezone
  * @apiSuccess {Boolean} beta_user Force Upgrade
- * @apiSuccess {Boolean}account_lock True if user is not available
- * @apiSuccess {Object} customer_datum Customer dataepg
+ * @apiSuccess {Boolean} account_lock True if user is not available
+ * @apiSuccess {Number} max_login_limit The number of devices customer can simultaneously login. The limit is separately applied for mobile and stb devices
+ * @apiSuccess {Object} customer_datum Customer data
  * @apiSuccess {String} customer_datum.firstname First name of the customer
  * @apiSuccess {String} customer_datum.lastname Last name of the customer
  * @apiSuccess {String} customer_datum.email Email of the customer
@@ -53,17 +55,17 @@ var path = require('path'),
         "timezone": 1,
         "beta_user": 1,
         "account_lock": 0,
+        "max_login_limit": 3,
         "vod_stream_source": 1,
-        "firstname": "your_name",
-        "lastname": "your_lastname",
-        "email": "email@example.com",
-        "telephone": "012345",
-        "address": "address",
-        "city": "Tirane",
-        "country": "Albania",
-        "updatedAt": "2019-12-31T09:51:21.000Z",
-        "vod_stream_source.id": 1
         "channel_stream_source.id": 1
+        "customer_datum.firstname": "your_name",
+        "customer_datum.lastname": "your_lastname",
+        "customer_datum.email": "email@example.com",
+        "customer_datum.telephone": "012345",
+        "customer_datum.address": "address",
+        "customer_datum.city": "Tirane",
+        "customer_datum.country": "Albania",
+        "customer_datum.updatedAt": "2020-06-26T14:22:52.000Z"
     },
     ]
  * }
@@ -72,7 +74,7 @@ var path = require('path'),
  */
 exports.listCustomers = function(req, res) {
     let query = {};
-    query.attributes = ['id','username','createdAt','mac_address','pin', 'show_adult','player','timezone','beta_user','account_lock', 'channel_stream_source_id', 'vod_stream_source'];
+    query.attributes = ['id','username','createdAt','mac_address','pin', 'show_adult','player','timezone','beta_user','account_lock', 'max_login_limit', 'channel_stream_source_id', 'vod_stream_source'];
     query.where = {company_id: req.token.company_id};
     query.include = [
         {
@@ -81,8 +83,7 @@ exports.listCustomers = function(req, res) {
             required: true
         }];
     query.limit = 100;
-    query.raw = true;
-    query.order = 'customer_datum.updatedAt desc'
+    query.order = [[Sequelize.literal('customer_datum.updatedAt'), 'DESC']]
     query.raw = true;
 
     if (req.query.offset) {
@@ -109,7 +110,7 @@ exports.listCustomers = function(req, res) {
  * @apiParam (Query parameters) {String} apikey Authorization key as query parameter
  * @apiSuccess (200) {Object[]} data customer
  * @apiSuccess {Number} id Id of the customer
- * @apiSuccess {String} customername customername the of customer
+ * @apiSuccess {String} username Name the of customer
  * @apiSuccess {Date} createdAt Time when customer created
  * @apiSuccess {String} mac_address Mac address of the customer
  * @apiSuccess {Number} pin Pin of the customer
@@ -118,6 +119,7 @@ exports.listCustomers = function(req, res) {
  * @apiSuccess {Number} timezone Timezone
  * @apiSuccess {Boolean} beta_user Force Upgrade
  * @apiSuccess {Boolean} account_lock True if user is not available
+ * @apiSuccess {Number} max_login_limit The number of devices customer can simultaneously login. The limit is separately applied for mobile and stb devices
  * @apiSuccess {Object} data.customer_datum Customer data
  * @apiSuccess {String} data.customer_datum.firstname First name of the customer
  * @apiSuccess {String} data.customer_datum.lastname Last name of the customer
@@ -146,13 +148,14 @@ exports.listCustomers = function(req, res) {
         "timezone": 2,
         "beta_user": 1,
         "account_lock": 0,
-        "firstname": "your_name",
-        "lastname": "your_lastname",
-        "email": "email@example.com",
-        "telephone": "0000",
-        "address": "address1",
-        "city": "Tirane",
-        "country": " Albania",
+        "max_login_limit": 3,
+        "customer_datum.firstname": "your_name",
+        "customer_datum.lastname": "your_lastname",
+        "customer_datum.email": "email@example.com",
+        "customer_datum.telephone": "0000",
+        "customer_datum.address": "address1",
+        "customer_datum.city": "Tirane",
+        "customer_datum.country": " Albania",
         "vod_stream_source.id": 1
         "channel_stream_source.id": 1
     }
@@ -164,12 +167,12 @@ exports.listCustomers = function(req, res) {
 exports.getCustomer = function(req, res) {
     let username = req.params.username
     if (username) {
-        db.login_data.find({
-            attributes: ['id', 'username', 'createdAt','mac_address','pin', 'show_adult','player','timezone','beta_user','account_lock', 'channel_stream_source_id', 'vod_stream_source'],
+        db.login_data.findOne({
+            attributes: ['id', 'username', 'createdAt','mac_address','pin', 'show_adult','player','timezone','beta_user','account_lock', 'max_login_limit', 'channel_stream_source_id', 'vod_stream_source'],
             where: {username: username, company_id: req.token.company_id},
             include: [{
                 model: db.customer_data,
-                attributes:['firstname','lastname','email','telephone','address','city','country'],
+                //attributes:['firstname','lastname','email','telephone','address','city','country'],
                 required: true
             }],
             raw: true
@@ -204,15 +207,16 @@ exports.getCustomer = function(req, res) {
  * @apiParam {String} [city]  City
  * @apiParam {String} [country]  Country
  * @apiParam {String} [telephone] Telephone of the country
- * @apiParam {String} mac_address Mac address of the customer
- * @apiParam {Number}pin Pin of the customer
- * @apiParam {Boolean} show_adult Rights for adult channels
- * @apiParam {String} player Player name
- * @apiParam {Number} timezone Timezone
- * @apiParam {Boolean} beta_user Force Upgrade
- * @apiParam {Boolean} account_lock True if user is not available
- * @apiParam {Number} channel_stream_source_id Live stream id
- * @apiParam {Number} vod_stream_source_id Vod stream id
+ * @apiParam {String} [mac_address] Mac address of the customer
+ * @apiParam {Number} [pin] Pin of the customer
+ * @apiParam {Boolean} [show_adult] Rights for adult channels
+ * @apiParam {String} [player] Player name
+ * @apiParam {Number} [timezone] Timezone
+ * @apiParam {Boolean} [beta_user] Force Upgrade
+ * @apiParam {Boolean} [account_lock] True if user is not available
+ * @apiParam {Number} [max_login_limit] The number of devices customer can simultaneously login. The limit is separately applied for mobile and stb devices
+ * @apiParam {Number} [channel_stream_source_id] Live stream id
+ * @apiParam {Number} [vod_stream_source] Vod stream id
  * @apiSuccess (200) {Object[]} data Response
  * @apiSuccess {String} data.message Message
  * @apiError (40x) {Object} error Error-Response
@@ -277,6 +281,7 @@ exports.updateCustomer = function(req, res) {
  * @apiParam {Number} [timezone] Timezone
  * @apiParam {Boolean} [beta_user] Force Upgrade
  * @apiParam {Boolean} [account_lock] True if user is not available
+ * @apiParam {Number} [max_login_limit] The number of devices customer can simultaneously login. The limit is separately applied for mobile and stb devices
  * @apiParam {Number} [channel_stream_source_id] Live stream id
  * @apiParam {Number} [vod_stream_source] Vod stream id
  * @apiSuccess (200) {Object[]} data Response
@@ -342,6 +347,7 @@ exports.updateCustomer = function(req, res) {
  * @apiParam {Number} [timezone] Timezone
  * @apiParam {Boolean} [beta_user] Force Upgrade
  * @apiParam {Boolean} [account_lock] True if user is not available
+ * @apiParam {Number} [max_login_limit] The number of devices customer can simultaneously login. The limit is separately applied for mobile and stb devices
  * @apiParam {Number} [channel_stream_source_id] Live stream id
  * @apiParam {Number} [vod_stream_source_id] Vod stream id
  * @apiSuccess (200) {Object[]} data Response
@@ -354,6 +360,11 @@ exports.createCustomer = function(req, res) {
     if (!req.body.username || !req.body.email || !req.body.password || !req.body.firstname || !req.body.lastname) {
         return res.status(400).send({error: {code: 400, message: 'Required parameters like username, email, password, firstname, lastname are missing'}});
     }
+
+    if (!validateUsername(req.body.username)) {
+        return res.status(400).send({error: {code: 400, message: 'Username must be alphanumeric, a-z and 0-9'}});
+    }
+
     req.body.company_id = req.token.company_id; //create customer under this company
 
     req.body.address = (req.body.address) ? req.body.address : '';
@@ -380,4 +391,12 @@ exports.createCustomer = function(req, res) {
                 winston.error('Create customer failed with error: ' + error)
                 res.status(500).send({error: {code: 500, message: 'Internal error'}})
             });
+}
+
+
+function validateUsername(username) {
+    //Regex for Valid Characters i.e. Alphabets and Numbers.
+    const regex = /^[a-z0-9]+$/
+    const isValid = regex.test(username);
+    return isValid ? true : false;
 }

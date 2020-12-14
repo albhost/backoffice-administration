@@ -3,13 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.package_type;
-
-const escape = require(path.resolve('./custom_functions/escape'));
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.package_type,
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 
 /**
@@ -44,7 +45,7 @@ exports.read = function(req, res) {
 exports.update = function(req, res) {
   var updateData = req.packageType;
 
-  updateData.updateAttributes(req.body).then(function(result) {
+  updateData.update(req.body).then(function(result) {
     res.json(result);
   }).catch(function(err) {
     winston.error("Updating package type failed with error: ", err);
@@ -60,7 +61,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.packageType;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
 
       result.destroy().then(function() {
@@ -95,18 +96,18 @@ exports.list = function(req, res) {
       query = req.query;
 
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.description = {};
-    qwhere.$or.description.$like = '%'+query.q+'%';
+    qwhere = {
+      [Op.or]: { description: { [Op.like]: `%${query.q}%` } }
+    }
   }
 
-  if(query.package_type_id) qwhere.id = {in : query.package_type_id};
+  if(query.package_type_id) qwhere.id = {[Op.in] : query.package_type_id};
 
   final_where.where = qwhere;
 
   if(parseInt(query._start)) final_where.offset = parseInt(query._start);
   if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
 
 
@@ -131,19 +132,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.packageTypeId);
 
-  DBModel.find({
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+  DBModel.findOne({
     where: {
-      id: id
-    },
-    include: []
+      id: value
+    }
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({
@@ -156,7 +159,9 @@ exports.dataByID = function(req, res, next, id) {
     }
   }).catch(function(err) {
     winston.error("Getting package type data failed with error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting  my package type data'
+      });
   });
 
 };

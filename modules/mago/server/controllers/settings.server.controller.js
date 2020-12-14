@@ -4,23 +4,19 @@
  * Module dependencies.
  */
 const path = require('path'),
-    dateFormat = require('dateformat'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    merge = require('merge'),
     DBModel = db.settings,
-    sequelize = require('sequelize'),
     config = require(path.resolve('./config/config')),
     companyFunctions = require(path.resolve('./custom_functions/company')),
     userFunctions = require(path.resolve('./custom_functions/user')),
     settings = require(path.resolve('./custom_functions/settings'));
 
 const sequelize_t = require(path.resolve('./config/lib/sequelize'));
-const jwt = require('jsonwebtoken'),
-    jwtSecret = process.env.JWT_SECRET;
-
+const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 
 /**
  * Show current
@@ -39,7 +35,7 @@ exports.read = function (req, res) {
 
 exports.env_settings = function (req, res) {
 
-    let company_id = 1;
+    let company_id = -1;
     if (req.get("Authorization")) {
         const aHeader = req.get("Authorization");
 
@@ -51,7 +47,7 @@ exports.env_settings = function (req, res) {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             company_id = decoded.company_id;
         } catch (err) {
-            company_id = 1;
+            company_id = -1;
         }
     }
     var env_settings = {
@@ -140,7 +136,7 @@ exports.update = function (req, res) {
         delete req.body.expire_date;
     }
 
-    new_settings = merge(req.body, new_setting); //merge values left @req.body with values stored @temp object into a new object
+    new_settings = Object.assign(req.body, new_setting) //merge values left @req.body with values stored @temp object into a new object
     logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(new_settings)); //write new values in logs
 
     req.body.asset_limitations = {
@@ -149,13 +145,13 @@ exports.update = function (req, res) {
         "vod_limit": req.body.asset_limitations.vod_limit
     };
 
-    req.settings.updateAttributes(new_settings).then(function (result) {
+    req.settings.update(new_settings).then(function (result) {
         return req.settings.reload()
             .then(function() {
                 settings.updateCompanySettings(req.settings);
                 res.json(settings);
             });
-        
+
     }).catch(function (err) {
         winston.error("Updating setting failed with error: ", err);
         res.status(400).send({
@@ -170,7 +166,7 @@ exports.update = function (req, res) {
  */
 exports.delete = function (req, res) {
     var deleteData = req.settings;
-    DBModel.findById(deleteData.id).then(function (result) {
+    DBModel.findByPk(deleteData.id).then(function (result) {
         if (result) {
             result.destroy().then(function () {
                 return res.json(result);
@@ -204,9 +200,7 @@ exports.list = function (req, res) {
         query = req.query;
 
     if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.company_name = {};
-        qwhere.$or.company_name.$like = '%'+query.q+'%';
+        qwhere = { [Op.or]: { company_name: { [Op.like]: `%${query.q}%` } } }
     }
 
     //start building where
@@ -581,19 +575,23 @@ exports.listAssets = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function (req, res, next, id) {
-
-    if ((id % 1 === 0) === false) { //check if it's integer
+exports.dataByID = function (req, res, next) {
+    const COMPANY_ID = req.token.company_id || 1;
+    const id = parseInt(req.params.settingId);
+    if (!id) {
         return res.status(404).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    if (req.token.company_id !== id && req.token.role !== 'superadmin') {
+        res.redirect(req.path.substr(0, req.path.lastIndexOf("/") + 1) + req.token.company_id); //redirects to /settings_api_example_url/company_id
+    }
+
+    DBModel.findOne({
         where: {
             id: id
-        },
-        include: []
+        }
     }).then(function (result) {
         if (!result) {
             return res.status(404).send({
@@ -601,12 +599,75 @@ exports.dataByID = function (req, res, next, id) {
             });
         } else {
             req.settings = result;
+            let protocol = new RegExp('^(https?|ftp)://');
+            if (protocol.test(req.body.box_logo_url)) {
+                let url = req.body.box_logo_url;
+                let pathname = new URL(url).pathname;
+                req.body.box_logo_url = pathname;
+            } else {
+                req.settings.box_logo_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.box_logo_url;
+            }
+
+            let protocol_box_background = new RegExp('^(https?|ftp)://');
+            if (protocol_box_background.test(req.body.box_background_url)) {
+                let url = req.body.box_background_url;
+                let pathname = new URL(url).pathname;
+                req.body.box_background_url = pathname;
+            } else {
+                req.settings.box_background_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.box_background_url;
+            }
+
+            let protocol_mobile_background = new RegExp('^(https?|ftp)://');
+            if (protocol_mobile_background.test(req.body.mobile_background_url)) {
+                let url = req.body.mobile_background_url;
+                let pathname = new URL(url).pathname;
+                req.body.mobile_background_url = pathname;
+            } else {
+                req.settings.mobile_background_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.mobile_background_url;
+            }
+
+            let protocol_portrait_background_url = new RegExp('^(https?|ftp)://');
+            if (protocol_portrait_background_url.test(req.body.portrait_background_url)) {
+                let url = req.body.portrait_background_url;
+                let pathname = new URL(url).pathname;
+                req.body.portrait_background_url = pathname;
+            } else {
+                req.settings.portrait_background_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.portrait_background_url;
+            }
+
+            let protocol_mobile_logo_url = new RegExp('^(https?|ftp)://');
+            if (protocol_mobile_logo_url.test(req.body.mobile_logo_url)) {
+                let url = req.body.mobile_logo_url;
+                let pathname = new URL(url).pathname;
+                req.body.mobile_logo_url = pathname;
+            } else {
+                req.settings.mobile_logo_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.mobile_logo_url
+            }
+
+            let protocol_vod_background_url = new RegExp('^(https?|ftp)://');
+            if (protocol_vod_background_url.test(req.body.vod_background_url)) {
+                let url = req.body.vod_background_url;
+                let pathname = new URL(url).pathname;
+                req.body.vod_background_url = pathname;
+            } else {
+                req.settings.vod_background_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.vod_background_url;
+            }
+            let protocol_company_logo = new RegExp('^(https?|ftp)://');
+            if (protocol_company_logo.test(req.body.company_logo)) {
+                let url = req.body.company_logo;
+                let pathname = new URL(url).pathname;
+                req.body.company_logo = pathname;
+            } else {
+                req.settings.company_logo = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.company_logo;
+            }
             next();
             return null;
         }
     }).catch(function (err) {
         winston.error("Getting setting data failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting settings data'
+        });
     });
 
 };

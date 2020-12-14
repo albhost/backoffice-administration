@@ -23,7 +23,7 @@ function loadAllChannelStreams() {
 function loadChannelStreamsToRedis(companyId, channelId, clearOnEmpty) {
     return new Promise(function(resolve, reject) {
         models.channel_stream.findAll({
-            attributes: ['id', 'channel_id', 'stream_source_id', 'stream_url', 'stream_mode', 'stream_resolution', 'token', 'token_provider', 'is_octoshape'],
+            attributes: ['id', 'channel_id', 'stream_source_id', 'stream_url', 'stream_mode', 'stream_resolution', 'token', 'token_provider', 'is_octoshape', 'thumbnail_url'],
             where: {channel_id: channelId}
         }).then(function(streams) {
             let redisKey = companyId + ':channels:' + channelId + ':streams';

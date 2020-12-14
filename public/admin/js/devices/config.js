@@ -9,7 +9,7 @@ export default function (nga, admin) {
 			'<sendpush type="deletedata" selection="selection"></sendpush>',
 			'<sendpush type="deletesharedpreferences" selection="selection"></sendpush>'
         ])
-		.actions(['batch', 'export', 'filter'])
+        .actions(['<remove type="remove_devices" selection="selection"></remove>','batch', 'export', 'filter'])
 		.fields([
 			nga.field('id')
 				.label('ID'),
@@ -46,6 +46,10 @@ export default function (nga, admin) {
 						return 'Apple TV';
 					} else if(value === 7) {
 						return 'Web Smart TV';
+					} else if(value === 8) {
+						return 'Web App';
+					} else if(value === 9) {
+						return 'Roku TV';
 					}
 				})
 				.label('App'),
@@ -79,7 +83,9 @@ export default function (nga, admin) {
 							 {value: 4, label: 'Stv'},
 							 {value: 5, label: 'Samsung'},
 							 {value: 6, label: 'Apple TV'},
-							 {value: 7, label: 'Web Smart TV'}
+							 {value: 7, label: 'Web Smart TV'},
+							 {value: 8, label: 'Web App'},
+							 {value: 9, label: 'Roku TV'}
 						 ])
            	  .attributes({ placeholder: 'App Id' })
         	  .label('App ID'),

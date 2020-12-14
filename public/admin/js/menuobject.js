@@ -89,7 +89,13 @@ export default [
         "children": [],
         "link":'/PaymentTransactions/list'
     },
-
+    {
+        "title":"Banners",
+        "icon":'<span class="fa fa-buysellads fa-fw dashboard_icon"></span>',
+        "group_roles":["admin","cc","marketing"],
+        "children": [],
+        "link":'/banners/create'
+    },
     {
         "title":"Notifications",
         "icon":'<span class="fa fa-users fa-fw dashboard_icon"></span>',
@@ -106,7 +112,14 @@ export default [
             "icon":'<span class="fa fa-buysellads fa-fw dashboard_icon"></span>',
             "link":'/ads/list',
             "group_roles":["admin","cc","marketing"]
-        }]
+        },{
+            "entity":"",
+            "title":"Subscription Message",
+            "icon":'<span class="fa fa-flag fa-fw dashboard_icon"></span>',
+            "link":'/notification/list',
+            "group_roles":["admin","cc","marketing"]
+        },
+        ]
     },
 
     //======================================Reports (access: admin, finance)===================================================
@@ -189,7 +202,13 @@ export default [
         "group_roles":["admin","content_management"],
         "children": []
     },
-
+    {
+        "title":"Home Page",
+        "icon":'<span class="fa fa-calendar-check-o fa-fw dashboard_icon"></span>',
+        "group_roles":["admin","finance"],
+        "children": [],
+        "link":'/carousels/list'
+    },
     {
         "title":"Live TV Channels",
         "icon":'<span class="fa fa-television fa-fw dashboard_icon"></span>',
@@ -360,7 +379,7 @@ export default [
                 "entity":"",
                 "title":"Import Movies From TMDB",
                 "icon":'<span class="fa fa-file-video-o  fa-fw dashboard_icon"></span>',
-                "link":'/tmdbvods/list?search=%7B"q":"titanic"%7D',
+                "link":'/tmdbvods/list',
                 "group_roles":["admin","content_management"]
             },
 
@@ -368,7 +387,7 @@ export default [
                 "entity":"",
                 "title":"Import TV Shows from TMDB",
                 "icon":'<span class="fa fa-file-video-o  fa-fw dashboard_icon"></span>',
-                "link":'/tmdbseries/list?search=%7B"q":"Stranger%20Things"%7D',
+                "link":'/tmdbseries/list',
                 "group_roles":["admin","content_management"]
             }
         ]

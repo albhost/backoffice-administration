@@ -5,9 +5,11 @@ var path = require('path'),
     winston = require('./winston'),
     redis = require('redis'),
     extractZip = require('extract-zip');
-
+    
 var binName;
 var dir = './bin/redis';
+
+var subscriberClient = null;
 
 module.exports.startServer = function(config, callback) {
     if (process.platform == 'win32') {
@@ -34,7 +36,7 @@ module.exports.startServer = function(config, callback) {
         const ext = path.extname(downloadUrl);
         const filename = 'redis-server' + ext;
     
-        download(downloadUrl).then((data) => {
+        download(downloadUrl).then( async (data) => {
             // noinspection JSAnnotator
             fs.writeFileSync('./redis/' + filename, data, {mode: 0775});
             if (ext == '') {
@@ -43,16 +45,15 @@ module.exports.startServer = function(config, callback) {
             } 
             else if (ext == '.zip') {
                 //unzip to redis folder and cleanup
-                const dir  = path.resolve('./redis');
-                extractZip('./redis/' + filename, {dir: dir}, function(err) {
-                    if (err) {
-                        callback(err);
-                        return;
-                    }
-    
+                try {
+                    const directory  = path.resolve('./redis');
+                    await extractZip('./redis/' + filename, {dir: directory})
                     winston.info('Redis download complete');
-                    start()
-                })
+                    start();
+                } catch (error) {
+                    callback(err);
+                    return;
+                }
             }
         })
     }
@@ -92,7 +93,7 @@ module.exports.startServer = function(config, callback) {
     }
     
     function start () {
-        server = new RedisServer({
+        const server = new RedisServer({
             port: config.port,
             bin: dir + '/' + binName
         });
@@ -131,3 +132,16 @@ module.exports.createClient = function(config) {
 }
 
 module.exports.client = null;
+
+module.exports.getSubscriberClient = function() {
+    if (subscriberClient) {
+        return subscriberClient;
+    }
+
+    if (!this.client) {
+        throw new Error('There is no existing connection to redis server that can be duplicated');
+    }
+
+    subscriberClient = this.client.duplicate();
+    return subscriberClient;
+}

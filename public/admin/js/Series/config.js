@@ -28,6 +28,7 @@ export default function (nga, admin) {
             nga.field('tv_series_categories','reference_many')
                 .targetEntity(admin.getEntity('VodCategories'))
                 .targetField(nga.field('name'))
+                 .perPage(-1)
                 .singleApiCall(function (category_id) {
                     return { 'category_id[]': category_id };
                 }).label('Genres'),
@@ -45,6 +46,13 @@ export default function (nga, admin) {
                 .perPage(-1)
                 .permanentFilters({ package_type_id: [3,4] })
                 .targetField(nga.field('package_name'))
+                .remoteComplete(true, {
+                  refreshDelay: 300,
+                  // populate choices from the response of GET /posts?q=XXX
+                  searchQuery: function (search) {
+                    return {q: search};
+                  }
+                })
                 .singleApiCall(function (package_id) {
                     return { 'package_id[]': package_id };
                 }).label('Packages'),
@@ -68,6 +76,13 @@ export default function (nga, admin) {
             nga.field('not_id', 'reference')
                 .targetEntity(admin.getEntity('vodPackages'))
                 .permanentFilters({ package_type_id: [3,4] })
+                .remoteComplete(true, {
+                  refreshDelay: 300,
+                  // populate choices from the response of GET /posts?q=XXX
+                  searchQuery: function (search) {
+                    return {q: search};
+                  }
+                })
                 .targetField(nga.field('package_name'))
                 .label('Not In Package'),
             nga.field('expiration_time', 'datetime')
@@ -131,13 +146,14 @@ export default function (nga, admin) {
             nga.field('tv_series_categories','reference_many')
                 .targetEntity(admin.getEntity('VodCategories'))
                 .targetField(nga.field('name'))
+                .perPage(-1)
                 .remoteComplete(true, {
-                    refreshDelay: 300,
-                    // populate choices from the response of GET /posts?q=XXX
-                    searchQuery: function (search) {
-                        return {q: search};
-                    }
-                })
+                      refreshDelay: 300,
+                      // populate choices from the response of GET /posts?q=XXX
+                      searchQuery: function (search) {
+                          return {q: search};
+                      }
+                  })
                 .label('Genres')
                 .attributes({ placeholder: 'Select genre' })
                 .singleApiCall(function (category_id) {
@@ -260,6 +276,11 @@ export default function (nga, admin) {
                 .attributes({placeholder: 'Choose from dropdown list'})
                 .validation({required: true})
                 .label('Mandatory ads'),
+            nga.field('release_date', 'date')
+                .attributes({ placeholder: 'Release date' })
+                .validation({ required: true })
+                .defaultValue(new Date())
+                .label('Release date'),
             nga.field('revenue', 'number')
                 .defaultValue(0)
                 .label('Revenues'),
@@ -295,10 +316,18 @@ export default function (nga, admin) {
                 .label('Movie Imdb Id'),
             nga.field('tv_series_categories','reference_many')
                 .targetEntity(admin.getEntity('VodCategories'))
-                .targetField(nga.field('name'))
+               .targetField(nga.field('name'))
                 .label('Genres')
                 .attributes({ placeholder: 'Select genre' })
-                .map(function getpckgid(value, entry) {
+                .remoteComplete(true, {
+                  refreshDelay: 300,
+                  // populate choices from the response of GET /posts?q=XXX
+                  searchQuery: function (search) {
+                    return {q: search};
+                  }
+                })
+              .perPage(-1)
+              .map(function getpckgid(value, entry) {
                     var return_object = [];
                     for (var i = 0; i < value.length; i++) {
                         return_object[i] = value[i].category_id;
@@ -314,6 +343,14 @@ export default function (nga, admin) {
                 .targetField(nga.field('package_name'))
                 .label('Packages')
                 .attributes({ placeholder: 'Select packages' })
+                .remoteComplete(true, {
+                  refreshDelay: 300,
+                  // populate choices from the response of GET /posts?q=XXX
+                  searchQuery: function (search) {
+                    return {q: search};
+                  }
+                })
+                .perPage(-1)
                 .map(function getpckgid(value, entry) {
                     var return_object = [];
                     for (var i = 0; i < value.length; i++) {
@@ -427,6 +464,11 @@ export default function (nga, admin) {
                 .attributes({placeholder: 'Choose from dropdown list'})
                 .validation({required: true})
                 .label('Mandatory ads'),
+            nga.field('release_date', 'date')
+                .attributes({ placeholder: 'Release date' })
+                .validation({ required: true })
+                .defaultValue(new Date())
+                .label('Release date'),
             nga.field('revenue', 'number')
                 .defaultValue(0)
                 .label('Revenues'),

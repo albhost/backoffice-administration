@@ -1,8 +1,7 @@
 'use strict';
-var path = require('path'),
-    querystring=require('querystring'),
-    therequest = require('request'),
-    winston = require(path.resolve('./config/lib/winston'));
+const path = require('path');
+const winston = require(path.resolve('./config/lib/winston'));
+const { default: Axios } = require('axios');
 
 function getlogtime(){
     var d = new Date();
@@ -16,39 +15,35 @@ function getipaddress(theip){
 }
 
 
-function trackobject(object_data,req, cb) {
+async function trackobject(object_data, req, cb) {
+  const matomourl = 'http://35.205.255.229/piwik.php';
+  const thismoment = new Date;
 
-    var matomourl = 'http://35.205.255.229/piwik.php';
-    var thismoment = new Date;
+  object_data.idsite = 2; //matomo required
+  object_data.rec = 1; //matomo required
+  //object_data.send_image=0;
 
-    object_data.idsite = 2; //matomo required
-    object_data.rec = 1; //matomo required
-    //object_data.send_image=0;
+  object_data.token_auth = 'd6b6d00e799635c1eea5443ce13cecad'; //matomo required for extra data, todo: implemnt on backend.
+  //object_data.token_auth = '5b06eebdcbaacb6cb613adc7832e0276'; //matomo required for extra data, todo: implemnt on backend.
 
-    object_data.token_auth = 'd6b6d00e799635c1eea5443ce13cecad'; //matomo required for extra data, todo: implemnt on backend.
-    //object_data.token_auth = '5b06eebdcbaacb6cb613adc7832e0276'; //matomo required for extra data, todo: implemnt on backend.
+  object_data.uid = req.auth_obj.username;        //user ID
+  object_data.ua = req.headers["user-agent"];    //user agent
+  object_data.cip = req.ip.replace('::ffff:', '');    // user ip
+  object_data.res = req.body.screensize || null; //screen resolution
 
-    object_data.uid = req.auth_obj.username;        //user ID
-    object_data.ua  = req.headers["user-agent"];    //user agent
-    object_data.cip = req.ip.replace('::ffff:', '');    // user ip
-    object_data.res = req.body.screensize || null; //screen resolution
+  object_data.h = thismoment.getHours();
+  object_data.m = thismoment.getMinutes();
+  object_data.s = thismoment.getSeconds();
 
-    object_data.h = thismoment.getHours();
-    object_data.m = thismoment.getMinutes();
-    object_data.s = thismoment.getSeconds();
-
-    therequest.post(
-        matomourl, {
-            form: object_data
-        },
-        function(err, response) {
-            if (err) { return cb(err); }
-            if (response.statusCode !== 200) {
-                return cb(new Error('Tracking failed'));
-            }
-            cb();
-        }
-    );
+  try {
+    let response = await Axios.post(matomourl, object_data);
+    if (response.status !== 200) {
+      return cb(new Error('Tracking failed'));
+    }
+    cb();
+  } catch (error) {
+    return cb(error);
+  }
 }
 
 exports.trackevent = function(req, res) {

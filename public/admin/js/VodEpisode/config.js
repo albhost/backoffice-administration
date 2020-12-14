@@ -261,6 +261,11 @@ export default function (nga, admin) {
                 .attributes({placeholder: 'Choose from dropdown list'})
                 .validation({required: true})
                 .label('Mandatory ads'),
+            nga.field('release_date', 'date')
+                .attributes({ placeholder: 'Release date' })
+                .validation({ required: true })
+                .defaultValue(new Date())
+                .label('Release date'),
             nga.field('revenue', 'number')
                 .defaultValue(0)
                 .label('Revenues'),
@@ -458,6 +463,11 @@ export default function (nga, admin) {
             nga.field('revenue', 'number')
                 .defaultValue(0)
                 .label('Revenues'),
+            nga.field('release_date', 'date')
+                .attributes({ placeholder: 'Release date' })
+                .validation({ required: true })
+                .defaultValue(new Date())
+                .label('Release date'),
             nga.field('budget', 'number')
                 .defaultValue(0)
                 .label('Budget'),

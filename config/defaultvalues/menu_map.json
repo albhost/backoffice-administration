@@ -118,8 +118,19 @@
           "api_group_name": "device_reports",
         "description": "Registered Devices Graph",
         "icon": "<span class='fa fa-bar-chart fa-fw dashboard_icon'></span>",
-        "children": [],
-        "link": "/activeDevicesChart"
+        "children": [
+          {
+            "entity": "",
+            "title": "Devices Chart",
+            "icon": "<span class='fa fa-bar-chart fa-fw dashboard_icon'></span>",
+            "link": "/activeDevicesChart"
+          },
+          {
+            "entity": "",
+            "title": "All Active Devices",
+            "icon": "<span class='fa fa-bar-chart fa-fw dashboard_icon'></span>",
+            "link": "/allActiveDevicesChart"
+          }]
       },
       {
         "id": 11,
@@ -319,19 +330,13 @@
             "entity": "",
             "title": "Import Movies From TMDB",
             "icon": "<span class='fa fa-file-video-o  fa-fw dashboard_icon'></span>",
-            "link": "/tmdbvods/list?search=%7B%22q%22:%22titanic%22%7D"
+            "link": "/tmdbvods/list"
           },
           {
             "entity": "",
             "title": "Import TV Shows from TMDB",
             "icon": "<span class='fa fa-file-video-o  fa-fw dashboard_icon'></span>",
-            "link": "/tmdbseries/list?search=%7B%22q%22:%22Stranger%20Things%22%7D"
-          },
-          {
-            "entity": "",
-            "title": "Import Subtitles from OpenSubtitles",
-            "icon": "<span class='fa fa-file-video-o  fa-fw dashboard_icon'></span>",
-            "link": "/subtitlesImport/list?search=%7B%22query%22:%22Stranger%20Things%22%7D"
+            "link": "/tmdbseries/list"
           }
         ]
       }

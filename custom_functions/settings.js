@@ -1,9 +1,12 @@
 "use stric"
 
+const { createStorage } = require('../config/lib/storage_manager');
+
 var path = require('path'),
     winston = require('winston'),
     redis = require(path.resolve('./config/lib/redis')),
-    db = require(path.resolve('./config/lib/sequelize')).models;
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    vmx = require('../modules/vmx/lib/vmx');
 
 const KEY_ADVANCED_POSTFIX = ':company_advanced_settings';
 const KEY_COMPANY_SETTINGS_POSTFIX = ':company_settings';
@@ -53,6 +56,8 @@ module.exports.setAdvancedSettings = function (newAdvancedSettings, clean, setUp
 
     let settingsJson = newAdvancedSettings.data;
     locals.advanced_settings[newAdvancedSettings.company_id] = settingsJson;
+    
+    createStorage(settingsJson.google_cloud, newAdvancedSettings.company_id);
 
     if (setUpdatedFlag) {
         locals.advanced_settings[newAdvancedSettings.company_id].already_updated = true;
@@ -64,6 +69,10 @@ module.exports.setAdvancedSettings = function (newAdvancedSettings, clean, setUp
             if (err) {
                 reject(err)
             } else {
+                if (settingsJson.vmx) {
+                    createVmxClient(newAdvancedSettings.company_id, settingsJson.vmx);
+                }
+                
                 resolve()
             }
         });
@@ -91,8 +100,12 @@ module.exports.loadAdvancedSettings = function () {
             redis.client.get(message + KEY_ADVANCED_POSTFIX, function(err, rawSettings) {
 
                 if(!locals.advanced_settings[message].already_updated) {
+                    let settingsJson = JSON.parse(rawSettings);
                     delete locals.advanced_settings[message];
-                    locals.advanced_settings[message] = JSON.parse(rawSettings);
+                    locals.advanced_settings[message] = settingsJson;
+                    if (settingsJson.vmx) {
+                        createVmxClient(message, settingsJson.vmx);
+                    }
                 }
                 else {
                     delete locals.advanced_settings[message].already_updated;
@@ -117,6 +130,19 @@ module.exports.loadAdvancedSettings = function () {
                 });
         });
     });
+}
+
+function createVmxClient(companyID, vmxConfig) {
+    let vmxOptions = {
+        tenantId: vmxConfig.tenant_id,
+        companyName: vmxConfig.company_name,
+        auth: {
+            username: vmxConfig.username,
+            password: vmxConfig.password
+        }
+    }
+
+    vmx.createClient(companyID, vmxOptions);
 }
 
 module.exports.loadCompanySettings = function() {
@@ -163,4 +189,8 @@ module.exports.init = function(app) {
     locals = app.locals;
     locals.backendsettings = {};
     locals.advanced_settings = {};
+
+    this.locals = locals
 }
+
+module.exports.locals = null;

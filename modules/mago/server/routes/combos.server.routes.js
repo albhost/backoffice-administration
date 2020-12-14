@@ -24,13 +24,14 @@ module.exports = function(app) {
 
 	app.route('/api/combos/:comboId')
         .all(policy.Authenticate)
+        .all(combos.dataByID)
         .get(combos.read);
 
 	app.route('/api/combos/:comboId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(combos.dataByID)
         .put(combos.update)
         .delete(combos.delete);
-    app.param('comboId', combos.dataByID);
 
 };

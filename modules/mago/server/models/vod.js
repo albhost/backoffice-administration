@@ -46,7 +46,13 @@ module.exports = function(sequelize, DataTypes) {
             allowNull: false,
             defaultValue: '[]',
             get: function () {
-                if(this.getDataValue('spoken_languages')) return JSON.parse(this.getDataValue('spoken_languages'));
+                if(this.getDataValue('spoken_languages')) {
+                    try {
+                        return JSON.parse(this.getDataValue('spoken_languages'));
+                    } catch (error) {
+                        return this.getDataValue('spoken_languages');
+                    }
+                }
             },
             set: function (value) {
                 return this.setDataValue('spoken_languages', JSON.stringify(value));

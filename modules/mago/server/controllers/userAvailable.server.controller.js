@@ -4,14 +4,10 @@
  * Module dependencies.
  */
 var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-    winston = require('winston'),
+  winston = require('winston'),
   db = require(path.resolve('./config/lib/sequelize')).models,
-  crypto = require('crypto'),
-  nodemailer = require('nodemailer'),
-  DBModel = db.users,
-  userFunctions = require(path.resolve('./custom_functions/user'));
-
+  DBModel = db.users;
+const { Op } = require('sequelize');
 
 /**
  * List
@@ -23,13 +19,13 @@ exports.list = function(req, res) {
       query = req.query;
 
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.username = {};
-    qwhere.$or.username.$like = '%'+query.q+'%';
-    qwhere.$or.email = {};
-    qwhere.$or.email.$like = '%'+query.q+'%';
-    qwhere.$or.telephone = {};
-    qwhere.$or.telephone.$like = '%'+query.q+'%';
+    let filters = []
+    filters.push(
+      { username: { [Op.like]: `%${query.q}%` } },
+      { email: { [Op.like]: `%${query.q}%` } },
+      { telephone: { [Op.like]: `%${query.q}%` } },
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   //start building where

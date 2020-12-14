@@ -3,12 +3,13 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    policy = require('../policies/mago.server.policy');
-
+    policy = require('../policies/mago.server.policy'),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -90,7 +91,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.users;
 
-    db.grouprights.findById(deleteData.id).then(function(result) {
+    db.grouprights.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -127,9 +128,9 @@ exports.list = function(req, res) {
 
     db.api_group.findAndCountAll({
         attributes: ['id', 'api_group_name', 'description'],
-        where: {api_group_name: {$notIn: ['users_and_roles', 'sale_agents']}},
+        where: {api_group_name: {[Op.notIn]: ['users_and_roles', 'sale_agents']}},
+        order: [["id", "ASC"]],
         include: [{model:db.grouprights, where: { group_id: req.query.group_id, company_id: req.token.company_id },required: false, attributes: ['group_id', 'allow']}],
-        order: ['api_group.id'],
         raw: true
     }).then(function(results) {
         if (!results) {
@@ -150,19 +151,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.grouprightsId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    db.grouprights.find({
+    db.grouprights.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({
@@ -175,7 +178,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Getting group right failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting group rights data'
+        });
     });
 
 };

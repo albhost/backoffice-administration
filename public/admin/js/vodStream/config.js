@@ -22,8 +22,8 @@ export default function (nga, admin) {
                 .label('Stream Type'),
             nga.field('token', 'boolean')
 				.label('Token'),
-			nga.field('encryption', 'boolean')
-				.label('Encryption'),
+/*			nga.field('encryption', 'boolean')
+				.label('Encryption'),*/
 			nga.field('token_url', 'string')
 				.label('Token Url'),
 		])
@@ -101,15 +101,17 @@ export default function (nga, admin) {
             nga.field('stream_resolution', 'choices')
                 .attributes({ placeholder: 'Select screen types where this stream should play' })
                 .choices([
-                    { value: 1, label: 'Android Set Top Box' },
-                    { value: 2, label: 'Android Smart Phone' },
-                    { value: 3, label: 'IOS' },
-                    { value: 4, label: 'Android Smart TV' },
-                    { value: 5, label: 'Samsung Smart TV' },
-                    { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
+                    { value: 1, label: '1 - Android Set Top Box' },
+                    { value: 2, label: '2 - Android Smart Phone' },
+                    { value: 3, label: '3 - IOS' },
+                    { value: 4, label: '4 - Android Smart TV' },
+                    { value: 5, label: '5 - Samsung Smart TV' },
+                    { value: 6, label: '6 - Apple TV' },
+                  {value: 7, label: '7 - Web Smart TV'},
+                  {value: 8, label: '8 - Web App'},
+                    {value: 9, label: '9 - Roku TV'}
                 ])
-                .defaultValue([1,2,3,4,5,6])
+                .defaultValue([1,2,3,4,5,6,7,8,9])
                 .validation({validator: function(value) {
                     if(value === null || value === ''){
                         throw new Error('Please Select Stream resolution');
@@ -170,18 +172,19 @@ export default function (nga, admin) {
                 .attributes({ placeholder: 'Token Url' })
                 .validation({ required: true })
                 .label('Token Url'),
-            nga.field('encryption', 'boolean')
+/*            nga.field('encryption', 'boolean')
                 .validation({ required: true })
                 .label('Encryption'),
             nga.field('encryption_url', 'string')
                 .defaultValue('Encryption url')
                 .validation({ required: true })
-                .label('Encryption url'),
+                .label('Encryption url'),*/
             nga.field('drm_platform', 'choice')
                 .attributes({ placeholder: 'Select from dropdown list' })
                 .defaultValue('none')
                 .choices([
                     { value: 'none', label: 'None' },
+                    { value: 'encryption', label: 'Internal AES Encryption'},
                     { value: 'pallycon', label: 'Pallycon' },
                     { value: 'verimatrix', label: 'Verimatrix' },
                     { value: 'widevine', label: 'Widevine' }
@@ -193,6 +196,41 @@ export default function (nga, admin) {
                     }
                 })
                 .label('DRM Platform *'),
+
+            nga.field('encryption_url')
+                .label('Key Delivery URL')
+                .defaultValue('')
+                .validation({ required: false })
+                .template('<ma-field ng-if="entry.values.drm_platform === \'encryption\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+
+            nga.field('encryption_url')
+                .label('Key Delivery URL')
+                .defaultValue('')
+                .validation({ required: false })
+                .template('<ma-field ng-if="entry.values.drm_platform === \'widevine\' " field="::field" value="entry.values[field.name()]" entry="entry" entity="::entity" form="formController.form" datastore="::formController.dataStore"></ma-field>', true),
+
+
+            nga.field('encryption', 'boolean')
+                .validation({ required: false })
+                .cssClasses('hidden')
+                .label('')
+                .defaultValue(0)
+                .map(function (value, entry) {
+                    if (!entry['encryption_url']) {
+                        return false;
+
+                    }
+                    else return true;
+                }),
+
+
+
+            nga.field('thumbnail_url', 'string')
+                .defaultValue('')
+                .attributes({ placeholder: 'Thumbnail URL' })
+                .validation({ required: false })
+                .label('Thumbnail URL'),
             nga.field('template')
                 .label('')
                 .template(edit_button),
@@ -200,7 +238,7 @@ export default function (nga, admin) {
 
 
     vodstream.editionView()
-    	.title('<h4>Vod Streams <i class="fa fa-angle-right" aria-hidden="true"></i> Edit: {{ entry.values.vod_id }}</h4>')  
+    	.title('<h4>Vod Streams <i class="fa fa-angle-right" aria-hidden="true"></i> Edit: {{ entry.values.vod_id }}</h4>')
     	.actions(['delete'])
         .fields([
             vodstream.creationView().fields(),
@@ -208,5 +246,5 @@ export default function (nga, admin) {
 
 
 	return vodstream;
-	
+
 }

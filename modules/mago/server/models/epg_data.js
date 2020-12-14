@@ -99,6 +99,10 @@ module.exports = function(sequelize, DataTypes) {
                 type: DataTypes.STRING(10),
                 allowNull: true
             }
+/*            icon_url: {
+                type: DataTypes.STRING(255),
+                allowNull: false
+            },*/
 
     },
         {

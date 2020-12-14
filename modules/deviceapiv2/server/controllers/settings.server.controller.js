@@ -3,14 +3,13 @@ var path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')),
     response = require(path.resolve("./config/responses.js")),
     vod = require(path.resolve("./modules/deviceapiv2/server/controllers/vod.server.controller.js")),
-    schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js")),
     winston = require(path.resolve('./config/lib/winston')),
     dateFormat = require('dateformat'),
     moment = require('moment'),
-    querystring = require('querystring'),
     async = require('async'),
     http = require('http'),
     models = db.models;
+const { Op } = require('sequelize');
 
 var id = -1;
 var upgradetype = 1;
@@ -169,11 +168,11 @@ exports.settings = function (req, res) {
                 attributes: ['id', 'title', 'description', 'url', 'isavailable', 'updatedAt'],
                 limit: 1,
                 where: {
-                    beta_version: { in: get_beta_app },
+                    beta_version: { [Op.in]: get_beta_app },
                     appid: req.auth_obj.appid,
-                    upgrade_min_api: { lte: req.body.api_version }, //device api version must be greater / equal to min api version of the upgrade
-                    upgrade_min_app_version: { lte: req.body.appversion }, //device app version must be greater / equal to min app version of the upgrade
-                    app_version: { gt: req.body.appversion }, //device app version must be smaller than the app version of the upgrade
+                    upgrade_min_api: { [Op.lte]: req.body.api_version }, //device api version must be greater / equal to min api version of the upgrade
+                    upgrade_min_app_version: { [Op.lte]: req.body.appversion }, //device app version must be greater / equal to min app version of the upgrade
+                    app_version: { [Op.gt]: req.body.appversion }, //device app version must be smaller than the app version of the upgrade
                     isavailable: 1,
                     company_id: req.thisuser.company_id
                 },
@@ -232,9 +231,9 @@ exports.settings = function (req, res) {
                     { model: models.vod_stream, required: true, attributes: ['url', 'encryption', 'token', 'stream_format', 'token_url'] },
                     {
                         model: models.vod_vod_categories, required: true, attributes: [],
-                        include: [{ model: models.vod_category, required: true, attributes: [], where: { password: { in: allowed_content }, isavailable: true } }]
+                        include: [{ model: models.vod_category, required: true, attributes: [], where: { password: { [Op.in]: allowed_content }, isavailable: true } }]
                     }
-                ], where: { pin_protected: { in: allowed_content }, isavailable: true, company_id: req.thisuser.company_id }
+                ], where: { pin_protected: { [Op.in]: allowed_content }, isavailable: true, company_id: req.thisuser.company_id }
             }).then(function (record_count) {
                 callback(null, login_data, daysleft, seconds_left, refresh, available_upgrade, offset, record_count.length); //return nr of vod records
                 return null;
@@ -249,7 +248,7 @@ exports.settings = function (req, res) {
             if (req.body.activity === 'vod') {
                 models.vod_resume.findOne({
                     attributes: ['vod_id', 'resume_position'],
-                    where: { login_id: login_data.id, device_id: { not: req.auth_obj.boxid } }
+                    where: { login_id: login_data.id, device_id: { [Op.not]: req.auth_obj.boxid } }
                 }).then(function (resume_movie) {
                     if (resume_movie) {
                         models.vod_stream.findOne({
@@ -304,7 +303,7 @@ exports.settings = function (req, res) {
                 "mainmenurefresh": mainmenurefresh,
                 "daysleft": daysleft,
                 "seconds_left": Math.min(req.app.locals.backendsettings[req.thisuser.company_id].activity_timeout, login_data.activity_timeout, seconds_left),
-                "online_payment_url": req.app.locals.backendsettings[req.thisuser.company_id].online_payment_url,
+                "online_payment_url": `${req.app.locals.backendsettings[req.thisuser.company_id].online_payment_url}?username=${req.thisuser.username}`,
                 "days_left_message": days_left_message,
                 "record_count": Math.ceil(record_count / req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr),
                 "resume_movie": resume_vod,
@@ -364,9 +363,7 @@ exports.upgrade = function (req, res) {
  * @apiVersion 0.2.0
  * @apiName Help and support page
  * @apiGroup DeviceAPI
- * @apiHeader {--} -- --
  * @apiSuccess (200) {webpage} message Help page set in the management system, default help page otherwise
- * @apiError (40x) {--} -- --
  *
 
  */
@@ -377,6 +374,38 @@ exports.help_support = function (req, res) {
     var support_page = (!req.app.locals.backendsettings[company_id].help_page || req.app.locals.backendsettings[company_id].help_page.length < 1) ? '/help_and_support' : req.app.locals.backendsettings[company_id].help_page;
     res.redirect(support_page);
 };
+
+
+/**
+ * @api {get} /help_support Help and support page
+ * @apiVersion 0.3.0
+ * @apiName Help and support page
+ * @apiGroup DeviceAPI
+ * @apiSuccess (200) {webpage} message Help and support page set in the management system
+ *
+ */
+
+exports.helpAndSupport = function (req, res) {
+    let companyId = req.thisuser ? req.thisuser.company_id : 1;
+    let helpSupportPage = (!req.app.locals.backendsettings[companyId].help_page || req.app.locals.backendsettings[companyId].help_page.length < 1) ? '/help_support' : req.app.locals.backendsettings[companyId].help_page;
+    res.redirect(helpSupportPage);
+}
+
+
+/**
+ * @api {get} /terms_and_condition Privacy policy, terms and condition page
+ * @apiVersion 0.3.0
+ * @apiName Terms and condition page
+ * @apiGroup DeviceAPI
+ * @apiSuccess (200) {webpage} message Terms and condition page set in the management system
+ *
+ */
+
+exports.termsAndCondition = function (req, res) {
+    let companyId = req.thisuser ? req.thisuser.company_id : 1;
+    let termsAndConditionPage = (!req.app.locals.backendsettings[companyId].terms_condition_page || req.app.locals.backendsettings[companyId].terms_condition_page.length < 1) ? '/terms_and_condition' : req.app.locals.backendsettings[companyId].terms_condition_page;
+    res.redirect(termsAndConditionPage);
+}
 
 
 function isvalidoffset(offset) {
@@ -439,12 +468,26 @@ exports.get_settings = function (req, res) {
                    ]
                 }
         ]
-    }).then(function (enddate) {
+    }).then(async (enddate) => {
         //res.send(enddate);
         const end_date = (enddate[0]) ? moment(enddate[0].end_date, "YYYY-M-DD HH:mm:ss") : moment(new Date(), "YYYY-M-DD HH:mm:ss");  //if no subscription found, enddate set as current time to return 0 days left
         const current_date = moment(new Date(), "YYYY-M-DD HH:mm:ss");
         const seconds_left = end_date.diff(current_date, 'seconds');
 
+        const deviceInfo = await models.devices.findOne({
+            attributes: ['id'],
+            include: [{
+                model: models.device_mediaplayer, required: true,
+                include: [{
+                    attributes: ['player_name'],
+                    model: models.media_player, required: true,
+                    where: { app_id: req.auth_obj.appid }
+                }]
+            }],
+            where: {
+                device_id: req.auth_obj.boxid
+            },
+        })
         //re-evaluating push task for subscription end. All current tasks of this screen size are deleted, a new task is created
 
         if (req.auth_obj.appid === '2' || req.auth_obj.appid === '3') {
@@ -503,7 +546,7 @@ exports.get_settings = function (req, res) {
             "mainmenurefresh": mainmenurefresh,
             "daysleft": daysleft,
             "seconds_left": Math.min(req.app.locals.backendsettings[req.thisuser.company_id].activity_timeout, login_data.activity_timeout, seconds_left),
-            "online_payment_url": req.app.locals.backendsettings[req.thisuser.company_id].online_payment_url,
+            "online_payment_url": `${req.app.locals.backendsettings[req.thisuser.company_id].online_payment_url}?username=${req.thisuser.username}`,
             "days_left_message": days_left_message,
             //"record_count": Math.ceil(record_count / req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr),
             //"resume_movie": resume_vod,
@@ -514,6 +557,7 @@ exports.get_settings = function (req, res) {
             "channel_log_time": req.app.locals.backendsettings[req.thisuser.company_id].channel_log_time,
             "activity_timeout": Math.min(req.app.locals.backendsettings[req.thisuser.company_id].activity_timeout, login_data.activity_timeout),
             "player": login_data.player,
+            "player_name": deviceInfo ? deviceInfo.device_mediaplayer.media_player.player_name : '',
             "pin": login_data.pin,
             "showadult": login_data.show_adult,
             "timezone": login_data.timezone,
@@ -531,11 +575,11 @@ exports.get_settings = function (req, res) {
             attributes: ['id', 'title', 'description', 'url', 'isavailable', 'updatedAt'],
             limit: 1,
             where: {
-                beta_version: { in: get_beta_app },
+                beta_version: { [Op.in]: get_beta_app },
                 appid: req.auth_obj.appid,
-                upgrade_min_api: { lte: req.get("api_version") }, //device api version must be greater / equal to min api version of the upgrade
-                upgrade_min_app_version: { lte: req.get("appversion") }, //device app version must be greater / equal to min app version of the upgrade
-                app_version: { gt: req.get("appversion") }, //device app version must be smaller than the app version of the upgrade
+                upgrade_min_api: { [Op.lte]: req.get("api_version") }, //device api version must be greater / equal to min api version of the upgrade
+                upgrade_min_app_version: { [Op.lte]: req.get("appversion") }, //device app version must be greater / equal to min app version of the upgrade
+                app_version: { [Op.gt]: req.get("appversion") }, //device app version must be smaller than the app version of the upgrade
                 isavailable: 1,
                 company_id: req.thisuser.company_id
             },

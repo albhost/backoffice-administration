@@ -7,12 +7,21 @@ var path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     models = require(path.resolve('./config/lib/sequelize')).models;
-
+const { Op } = require('sequelize');
 /**
  * Create
  */
-exports.create = function(req, res) {
+exports.create = async function(req, res) {
     req.body.company_id = req.token.company_id; //save record for this company
+    const {title, channel_id} = req.body
+    const hasFound = await checkIfExists(title, channel_id, req)
+
+    if(!hasFound) {
+        return res.status(400).send({
+            message: "The image you trying to add has no respective EPG match"
+        });
+    }
+
     models.program_content.create(req.body).then(function(result) {
         if (!result) {
             res.status(400).send({message: 'Failed to create program content'});
@@ -41,7 +50,7 @@ exports.read = function(req, res) {
  */
 exports.update = function(req, res) {
     if(req.program_content.company_id === req.token.company_id){
-        req.program_content.updateAttributes(req.body).then(function(result) {
+        req.program_content.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Updating program content failed with errro: ", err);
@@ -78,10 +87,10 @@ exports.list = function(req, res) {
         final_where = {},
         query = req.query;
 
+    if (req.query.channel_id) qwhere.channel_id = req.query.channel_id;
+
     if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.title = {};
-        qwhere.$or.title.$like = '%'+query.q+'%';
+        qwhere = Object.assign(qwhere, { [Op.or]: { title: { [Op.like]: `%${query.q}%` } } })
     }
 
     //start building where
@@ -112,7 +121,7 @@ exports.list = function(req, res) {
 exports.dataByID = function(req, res, next) {
     let id = req.params.id;
 
-    models.program_content.find({
+    models.program_content.findOne({
         where: {id: id, company_id: req.token.company_id},
     }).then(function(result) {
         if (!result) {
@@ -130,3 +139,50 @@ exports.dataByID = function(req, res, next) {
         });
     });
 };
+
+const getImagePerProgram = async function (programName, channelId, req) {
+  try {
+    const epgProgramImage = await models.program_content.findOne({
+      where: {
+        title: {
+          [Op.like]: `%${programName.trim()}%`
+        },
+        channel_id: channelId
+      }
+    });
+
+    if (!epgProgramImage) {
+      return null;
+    }
+
+    let headerCompany = req.headers.company_id ? req.headers.company_id : 1;
+
+    const companyId = req.thisuser ? req.thisuser.company_id : headerCompany;
+    const asset_url = req.app.locals.backendsettings[companyId].assets_url;
+
+    return asset_url + epgProgramImage.icon_url;
+  } catch (e) {
+    winston.error("Finding Image per program failed with error, error: ", e);
+  }
+};
+
+const checkIfExists = async function (programName, channelId, req) {
+    try {
+        const epgProgramImage = await models.epg_data.findOne({
+            where: {
+                title: {
+                    [Op.like]: `%${programName}%`
+                },
+                channels_id: channelId
+            }
+        });
+
+        if (!epgProgramImage) {
+            return null;
+        } else return true
+    } catch (e) {
+        winston.error("Finding Image per program failed with error, error: ", e);
+    }
+};
+
+exports.getImagePerProgram = getImagePerProgram;

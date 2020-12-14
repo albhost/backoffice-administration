@@ -9,7 +9,6 @@ const path = require('path'),
   winston = require('winston'),
   db = require(path.resolve('./config/lib/sequelize')).models,
   settings = require(path.resolve('./custom_functions/settings')),
-  merge = require('merge'),
   DBModel = db.advanced_settings;
 
 /**
@@ -70,7 +69,7 @@ exports.update = function (req, res) {
 exports.delete = function (req, res) {
   var deleteData = req.advancedsettings;
 
-  DBModel.findById(deleteData.id).then(function (result) {
+  DBModel.findByPk(deleteData.id).then(function (result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function () {
@@ -100,21 +99,20 @@ exports.delete = function (req, res) {
 
 
 exports.getAdvancedSettings = function (req, res) {
-  db.advanced_settings.findOne({
-    where: {
-      company_id: req.token.company_id
-    },
-    include: []
-  }).then(function (result) {
-    if (!result) {
-      return res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-    } else {
-      return res.jsonp(result);
-    }
-  }).catch(function (err) {
-    winston.error("Getting a specific setting failed with error: ", err);
-    return next(err);
-  });
+    db.advanced_settings.findOne({
+        where: {
+            company_id: req.token.company_id
+        }
+    }).then(function (result) {
+        if (!result) {
+            return res.status(404).send({
+                message: 'No data with that identifier has been found'
+            });
+        } else {
+            return res.jsonp(result.data);
+        }
+    }).catch(function (err) {
+        winston.error("Getting a specific setting failed with error: ", err);
+        return next(err);
+    });
 };

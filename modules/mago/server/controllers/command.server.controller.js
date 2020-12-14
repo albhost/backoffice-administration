@@ -7,7 +7,7 @@ var path = require('path'),
   winston = require('winston'),
   DBModel = db.commands,
   DBDevices = db.devices;
-
+  const  { Op } = require('sequelize');
 /**
  * @api {post} /api/ads Push messages - Send ads
  * @apiVersion 0.2.0
@@ -66,7 +66,7 @@ exports.create = function (req, res) {
     } else return res.status(400).send({message: "You did not select any device types"});
 
     if (req.body.sendtoactivedevices) where.device_active = true; //if we only want to send push msgs to active devices, add condition
-    where.appid = {$in: device_types}; //filter devices by application id
+    where.appid = {[Op.in]: device_types}; //filter devices by application id
     where.company_id = req.token.company_id;
 
 
@@ -201,8 +201,8 @@ exports.list = function (req, res) {
   var join_where = {};
 
   if (req.query.status) where.status = req.query.status;
-  if (req.query.command) where.command = {like: '%' + req.query.command + '%'};
-  if (req.query.username) join_where.username = {like: '%' + req.query.username + '%'};
+  if (req.query.command) where.command = {[Op.like]: '%' + req.query.command + '%'};
+  if (req.query.username) join_where.username = {[Op.like]: '%' + req.query.username + '%'};
 
   query.attributes = ['id', 'googleappid', 'command', 'status', 'createdAt'];
   query.include = [{model: db.login_data, attributes: ['username'], required: true, where: join_where}];

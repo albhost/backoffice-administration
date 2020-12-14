@@ -17,11 +17,9 @@ module.exports = function(app) {
     app.route('/api/vodcategories/:vodCategoryId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vodCategories.dataByID)
         .get(vodCategories.read)
         .put(vodCategories.update)
         .delete(vodCategories.delete);
-
-    app.param('vodCategoryId', vodCategories.dataByID);
-
 
 };

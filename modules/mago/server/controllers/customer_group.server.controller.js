@@ -3,14 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.customer_group;
-
-const escape = require(path.resolve('./custom_functions/escape'));
-
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.customer_group,
+    Joi = require("joi"),
+    escape = require(path.resolve('./custom_functions/escape'));
+const { Op } = require('sequelize');
 
 /**
  * Create
@@ -46,7 +46,7 @@ exports.update = function(req, res) {
   var updateData = req.customerGroup;
 
   if(updateData.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       res.json(result);
     }).catch(function(err) {
       winston.error("Updating customer group failed with error: ", err);
@@ -66,7 +66,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.customerGroup;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function() {
@@ -105,9 +105,9 @@ exports.list = function(req, res) {
       query = req.query;
 
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.description = {};
-    qwhere.$or.description.$like = '%'+query.q+'%';
+    qwhere = {
+      [Op.or]: { description: { [Op.like]: `%${query.q}%` } }
+    }
   }
 
   //start building where
@@ -117,7 +117,7 @@ exports.list = function(req, res) {
     if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
   }
 
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
   final_where.include = [];
 
@@ -146,32 +146,36 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function (req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.customerGroupId);
 
-  DBModel.find({
-    where: {
-      id: id
-    },
-    include: []
-  }).then(function(result) {
-    if (!result) {
-      return res.status(404).send({
-        message: 'No data with that identifier has been found'
-      });
-    } else {
-      req.customerGroup = result;
-      next();
-      return null;
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
     }
-  }).catch(function(err) {
-    winston.error("Getting customer data failed with error: ", err);
-    return next(err);
-  });
+
+    DBModel.findOne({
+        where: {
+            id: value
+        }
+    }).then(function (result) {
+        if (!result) {
+            return res.status(404).send({
+                message: 'No data with that identifier has been found'
+            });
+        } else {
+            req.customerGroup = result;
+            next();
+            return null;
+        }
+    }).catch(function (err) {
+        winston.error("Getting customer data failed with error: ", err);
+        return res.status(500).send({
+            message: 'Error at getting customer_group data'
+        });
+    });
 
 };

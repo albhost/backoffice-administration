@@ -16,7 +16,7 @@ var path = require('path'),
 	email_templates = db.email_templates,
 	customer_data = db.customer_data,
     eventSystem = require(path.resolve("./config/lib/event_system.js"));
-
+const { Op } = require('sequelize');
 
 exports.createaccount = function (req, res) {
 	let company_id = req.headers.company_id ? req.headers.company_id : 1;
@@ -112,7 +112,8 @@ exports.createaccount = function (req, res) {
 						force_upgrade: 0,
 						account_lock: 0,
 						resetPasswordToken: token,
-						resetPasswordExpires: Date.now() + 86400000 // email confirmation till 1 day from now
+						resetPasswordExpires: Date.now() + 86400000, // email confirmation till 1 day from now
+                        max_login_limit: 1
 					}).then(function (new_login) {
 						done(null, token, new_customer);
 						return null;
@@ -208,8 +209,7 @@ exports.createAccountV2 = function (req, res) {
 			telephone: req.body.telephone,
 			group_id: 1 //todo: how will it be determined what company belongs the user during signup
 		}).then(function (new_customer) {
-            eventSystem.emit(company_id, eventSystem.EventType.customer_created, new_customer);
-			const player = req.app.locals.advanced_settings[req.authParams.companyId].default_player;
+			const player = req.app.locals.advanced_settings[company_id].default_player.value;
 
 			return login_data.create({
 				customer_id: new_customer.id, //todo: saas:  how will it be determined what company belongs the user during signup
@@ -228,9 +228,13 @@ exports.createAccountV2 = function (req, res) {
 				get_ads: (company_configurations.get_ads) ? company_configurations.get_ads : false,
 				force_upgrade: 0,
 				account_lock: 0,
+                verified: false,
 				resetPasswordToken: token,
 				resetPasswordExpires: Date.now() + 86400000 // email confirmation till 1 day from now
 			}).then(function (new_login) {
+                let customer_data = {...new_customer.dataValues, ...new_login.dataValues}
+
+                eventSystem.emit(company_id, eventSystem.EventType.customer_created, customer_data);
 				//Send initation email
 				email_templates.findOne({
 					attributes: ['title', 'content'],
@@ -240,7 +244,7 @@ exports.createAccountV2 = function (req, res) {
 						res.render(path.resolve('modules/deviceapiv2/server/templates/new-account'), {
 							name: new_customer.firstname + ' ' + new_customer.lastname,
 							appName: req.app.locals.backendsettings[company_id].company_name,
-							url: req.app.locals.originUrl + '/apiv2/sites/confirm-account/' + token
+							url: 'https://' + req.headers.host + '/apiv2/sites/confirm-account/' + token
 
 						}, function (err, emailHTML) {
 							return sendConfirmEmail(new_customer.email, emailHTML);
@@ -287,11 +291,11 @@ exports.confirmNewAccountToken = function (req, res) {
 
 	let COMPANY_ID = req.get("company_id") || 1;
 
-	login_data.find({
+	login_data.findOne({
 		where: {
 			resetPasswordToken: req.params.token,
 			resetPasswordExpires: {
-				$gt: Date.now()
+				[Op.gt]: Date.now()
 			}
 		}
 	}).then(function (user) {
@@ -300,6 +304,7 @@ exports.confirmNewAccountToken = function (req, res) {
 		}
 		user.resetPasswordExpires = 0;
 		user.account_lock = 0;
+		user.verified = 1;
 		user.save().then(function (result) {
 			add_default_subscription(result.id);
 		});

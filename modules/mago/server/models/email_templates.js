@@ -18,7 +18,7 @@ module.exports = function(sequelize, DataTypes) {
         template_id: {
             type: DataTypes.STRING(200),
             allowNull: false,
-            defaultValue: "code-pin-email,new-account,new-email,reset-password-email,reset-password-confirm-email,reset-password-email,reset-password-enter-password,salesreport-invoice",
+            defaultValue: "code-pin-email,new-account,new-email,reset-password-email,reset-password-confirm-email,reset-password-email,reset-password-enter-password,salesreport-invoice,reset-password-email-device",
             unique: 'templateid_language'
         },
         title: {

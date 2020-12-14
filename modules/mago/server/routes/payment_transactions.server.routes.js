@@ -20,9 +20,7 @@ module.exports = function(app) {
 
     app.route('/api/PaymentTransactions/:PaymentTransactionID')
         .all(policy.Authenticate)
+        .all(paymentTransactions.dataByID)
         //.all(policy.isAllowed)
         .get(paymentTransactions.read);
-
-    app.param('PaymentTransactionID', paymentTransactions.dataByID);
-
 };

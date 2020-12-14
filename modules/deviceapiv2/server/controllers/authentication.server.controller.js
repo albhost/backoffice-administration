@@ -5,22 +5,26 @@ var path = require('path'),
     winston = require(path.resolve('./config/lib/winston')),
     crypto = require('crypto'),
     CryptoJS  = require('crypto-js'),
-    querystring = require("querystring"),
     models = db.models;
 
 
 
-
-//returns a random salt
+/**
+ * @returns returns a random salt
+ */
 function makesalt(){
     return crypto.randomBytes(16).toString('base64');
 }
 
-//returns encrypted value of the plaintext password, with the given salt
+/**
+ * @param {String} password The plaintext password
+ * @param {string} salt The salt
+ * @returns returns encrypted value of the plaintext password, with the given salt
+ */
 function encryptPassword(password, salt) {
      if (!password || !salt)
      return '';
-     salt = new Buffer(salt, 'base64');
+     salt = Buffer.from(salt, 'base64');
      return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha1').toString('base64'); //at least 640000 times is suggested, will see later
 }
 
@@ -62,7 +66,7 @@ function encryptPasswordAsync(password, salt, callback) {
         return;
     }
 
-    salt = new Buffer(salt, 'base64');
+    salt = Buffer.from(salt, 'base64');
     crypto.pbkdf2(password, salt, 10000, 64, 'sha1', function(err, derivedKey) {
         if (err) {
             callback('');

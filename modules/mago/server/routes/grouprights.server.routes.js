@@ -23,10 +23,9 @@ module.exports = function(app) {
     app.route('/api/grouprights/:grouprightsId')
         .all(policy.Authenticate)
         //.all(policy.isAllowed)
+        .all(grouprights.dataByID)
         .get(grouprights.read)
         .put(grouprights.update);
         //.delete(groups.delete);
-
-    app.param('grouprightsId', grouprights.dataByID);
 
 };

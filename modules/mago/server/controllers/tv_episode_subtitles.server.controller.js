@@ -3,13 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     DBModel = db.tv_episode_subtitles,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    fs = require('fs');
+    fs = require('fs'),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 /**
  * Create
@@ -53,7 +54,7 @@ exports.update = function(req, res) {
     }
 
     if(req.tv_episodeSubtitle.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             if(deletefile) {
                 fs.unlink(deletefile, function (err) {
                     //todo: return ome warning
@@ -78,7 +79,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.tv_episodeSubtitle;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -120,12 +121,13 @@ exports.list = function(req, res) {
     var qwhere = {};
     if(query.tv_episode_id) qwhere.tv_episode_id = query.tv_episode_id;
 
-    if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.tv_episode_id = {};
-        qwhere.$or.tv_episode_id.$like = '%'+query.q+'%';
-        qwhere.$or.title = {};
-        qwhere.$or.title.$like = '%'+query.q+'%';
+    if (query.q) {
+        let filters = []
+        filters.push(
+            { tv_episode_id: { [Op.like]: `%${query.q}%` } },
+            { title: { [Op.like]: `%${query.q}%` } }
+        );
+        qwhere = { [Op.or]: filters };
     }
 
     qwhere.company_id = req.token.company_id;
@@ -154,17 +156,20 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.tv_episode_subtitle_id);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
+            id: value
         },
         include: [{model: db.tv_episode}]
     }).then(function(result) {
@@ -179,7 +184,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Error at fetching dataById, error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting  tv episode subtitle data'
+        });
     });
 
 };

@@ -22,11 +22,9 @@ module.exports = function(app) {
     app.route('/api/tv_episode_stream/:tv_episode_stream_id')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(tv_episodeStreams.dataByID)
         .get(tv_episodeStreams.read)
         .put(tv_episodeStreams.update)
         .delete(tv_episodeStreams.delete);
-
-    app.param('tv_episode_stream_id', tv_episodeStreams.dataByID);
-
 
 };

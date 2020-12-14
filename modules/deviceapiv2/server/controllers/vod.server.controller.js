@@ -3,7 +3,6 @@ const path = require('path'),
   db = require(path.resolve('./config/lib/sequelize')),
   sequelize = require('sequelize'),
   response = require(path.resolve("./config/responses.js")),
-  crypto = require('crypto'),
   models = db.models,
   winston = require(path.resolve('./config/lib/winston')),
   escape = require(path.resolve('./custom_functions/escape'));
@@ -11,7 +10,7 @@ const sequelizes = require(path.resolve('./config/lib/sequelize'));
 const async = require('async');
 const sqlstring = require('sqlstring');
 const dateformat = require('dateformat');
-
+const  { Op } = require('sequelize');
 
 //RETURNS LIST OF VOD PROGRAMS VIA GET Request
 /**
@@ -32,7 +31,7 @@ const dateformat = require('dateformat');
 exports.list_get_newdata = function (req, res) {
 
   models.subscription.findAll({
-    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}, group: ['package_id'],
+    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}, group: ['package_id'],
     include: [{
       model: models.package,
       required: true,
@@ -50,7 +49,7 @@ exports.list_get_newdata = function (req, res) {
         package_list.push(result[i].package_id); //list of packages into array
       }
       const allowed_content = [0, 1]; //(req.thisuser.show_adult === true) ? [0, 1] : [0];
-      const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+      const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
       const offset = (!req.params.pagenumber || req.params.pagenumber === '-1') ? 0 : ((parseInt(req.params.pagenumber) - 1) * req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr); //for older versions of vod, start query at first record
       const limit = (!req.params.pagenumber || req.params.pagenumber === '-1') ? 99999999999 : req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr; //for older versions of vod, set limit to 99999999999
@@ -69,16 +68,16 @@ exports.list_get_newdata = function (req, res) {
             '</p><p><strong>Starring:</strong> ', db.sequelize.col('vod.starring'), '</p>'), 'description'],
           [db.sequelize.fn('YEAR', db.sequelize.col('release_date')), "release_date"],
           [db.sequelize.fn("concat", req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('image_url')), 'largeimage'],
-          [db.sequelize.fn("concat", req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('icon_url')), 'icon']
+          [db.sequelize.fn("concat", req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('icon_url')), 'icon'], 'rate'
         ],
         include: [
           {
             model: models.vod_stream,
             required: true,
-            attributes: ['url', 'drm_platform', 'encryption', 'token', 'stream_format', 'token_url'],
+            attributes: ['url', 'drm_platform', 'encryption', 'token', 'stream_format', 'token_url', 'thumbnail_url'],
             where: {
               stream_source_id: req.thisuser.vod_stream_source,
-              stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+              stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
             }
           },
           {
@@ -88,14 +87,14 @@ exports.list_get_newdata = function (req, res) {
             where: {is_available: true},
             include: [{model: models.vod_category, attributes: ['name']}]
           },
-          {model: models.package_vod, required: true, attributes: [], where: {package_id: {in: package_list}}}
+          {model: models.package_vod, required: true, attributes: [], where: {package_id: {[Op.in]: package_list}}}
         ],
         where: {
-          pin_protected: {in: allowed_content},
+          pin_protected: {[Op.in]: allowed_content},
           adult_content: show_adult,
           isavailable: true,
-          updatedAt: {gt: tmptimestamp},
-          expiration_time: {$gte: Date.now()},
+          updatedAt: {[Op.gt]: tmptimestamp},
+          expiration_time: {[Op.gte]: Date.now()},
           company_id: req.thisuser.company_id
         },
         offset: offset,
@@ -125,6 +124,7 @@ exports.list_get_newdata = function (req, res) {
           raw_obj.stream_format = obj.vod_streams[0].stream_format;
           raw_obj.token = (obj.vod_streams[0].token === true) ? "1" : "0";
           raw_obj.TokenUrl = (obj.vod_streams[0].token_url) ? obj.vod_streams[0].token_url : "";
+          raw_obj.thumbnail_url = (obj.vod_streams[0].thumbnail_url) ? obj.vod_streams[0].thumbnail_url : "";
           raw_obj.encryption = (obj.vod_streams[0].encryption === true) ? "1" : "0";
           raw_obj.encryption_url = (obj.vod_streams[0].encryption_url) ? obj.vod_streams[0].encryption_url : "";
           raw_obj.drm_platform = obj.vod_streams[0].drm_platform;
@@ -169,7 +169,7 @@ exports.list_get_newdata = function (req, res) {
  */
 exports.list_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   const offset = (!req.params.pagenumber || req.params.pagenumber === '-1') ? 0 : ((parseInt(req.params.pagenumber) - 1) * req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr); //for older versions of vod, start query at first record
   const limit = (!req.params.pagenumber || req.params.pagenumber === '-1') ? 99999999999 : req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr; //for older versions of vod, set limit to 99999999999
@@ -186,7 +186,7 @@ exports.list_get = function (req, res) {
       {
         model: models.vod_stream,
         required: true,
-        attributes: ['url', 'drm_platform', 'encryption', 'token', 'stream_format', 'token_url']
+        attributes: ['url', 'drm_platform', 'encryption', 'token', 'stream_format', 'token_url', 'thumbnail_url']
       },
       {
         model: models.vod_vod_categories, required: true, attributes: ['category_id'], where: {is_available: true},
@@ -194,7 +194,7 @@ exports.list_get = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: ['name'],
-          where: {password: {in: allowed_content}, isavailable: true}
+          where: {password: {[Op.in]: allowed_content}, isavailable: true}
         }]
       },
       {
@@ -205,16 +205,16 @@ exports.list_get = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
     ],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     offset: offset,
@@ -278,7 +278,7 @@ exports.list_get = function (req, res) {
  */
 exports.list = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   const offset = (!req.body.subset_number || req.body.subset_number === '-1') ? 0 : ((parseInt(req.body.subset_number) - 1) * req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr); //for older versions of vod, start query at first record
   const limit = (!req.body.subset_number || req.body.subset_number === '-1') ? 99999999999 : req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr; //for older versions of vod, set limit to 99999999999
@@ -295,7 +295,7 @@ exports.list = function (req, res) {
       {
         model: models.vod_stream,
         required: true,
-        attributes: ['url', 'encryption', 'token', 'stream_format', 'token_url', 'drm_platform']
+        attributes: ['url', 'encryption', 'token', 'stream_format', 'token_url', 'drm_platform', 'thumbnail_url']
       },
       {
         model: models.vod_vod_categories,
@@ -312,16 +312,16 @@ exports.list = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
     ],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     offset: offset,
@@ -386,7 +386,7 @@ exports.list = function (req, res) {
  */
 exports.categories = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod_category.findAll({
     attributes: ['id', 'name', 'password', 'sorting', 'icon_url', 'small_icon_url'],
@@ -400,10 +400,10 @@ exports.categories = function (req, res) {
           attributes: [],
           required: true,
           where: {
-            pin_protected: {in: allowed_content},
+            pin_protected: {[Op.in]: allowed_content},
             adult_content: show_adult,
             isavailable: true,
-            expiration_time: {$gte: Date.now()}
+            expiration_time: {[Op.gte]: Date.now()}
           },
           include: [
             {model: models.vod_stream, required: true, attributes: []},
@@ -418,7 +418,7 @@ exports.categories = function (req, res) {
                   model: models.subscription,
                   required: true,
                   attributes: [],
-                  where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                  where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
                 }]
               }]
             }
@@ -426,7 +426,7 @@ exports.categories = function (req, res) {
         }
       ]
     }],
-    where: {password: {in: allowed_content}, isavailable: true, company_id: req.thisuser.company_id}
+    where: {password: {[Op.in]: allowed_content}, isavailable: true, company_id: req.thisuser.company_id}
   }).then(function (result) {
     let category_list = [];
     //type conversation of id from int to string. Setting static values
@@ -467,7 +467,7 @@ exports.categories = function (req, res) {
  */
 exports.categories_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod_category.findAll({
     attributes: ['id', 'name', 'password', 'sorting', 'icon_url', 'small_icon_url'],
@@ -481,10 +481,10 @@ exports.categories_get = function (req, res) {
           attributes: [],
           required: true,
           where: {
-            pin_protected: {in: allowed_content},
+            pin_protected: {[Op.in]: allowed_content},
             adult_content: show_adult,
             isavailable: true,
-            expiration_time: {$gte: Date.now()}
+            expiration_time: {[Op.gte]: Date.now()}
           },
           include: [
             {model: models.vod_stream, required: true, attributes: []},
@@ -499,7 +499,7 @@ exports.categories_get = function (req, res) {
                   model: models.subscription,
                   required: true,
                   attributes: [],
-                  where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                  where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
                 }]
               }]
             }
@@ -507,7 +507,7 @@ exports.categories_get = function (req, res) {
         }
       ]
     }],
-    where: {password: {in: allowed_content}, isavailable: true, company_id: req.thisuser.company_id}
+    where: {password: {[Op.in]: allowed_content}, isavailable: true, company_id: req.thisuser.company_id}
   }).then(function (result) {
     let category_list = [];
     //type conversation of id from int to string. Setting static values
@@ -562,7 +562,7 @@ exports.subtitles = function (req, res) {
   const subtitle_where = (req.body.vod_id) ? {
     vod_id: req.body.vod_id,
     company_id: req.thisuser.company_id
-  } : {vod_id: {$gt: 0}, company_id: req.thisuser.company_id};
+  } : {vod_id: {[Op.gt]: 0}, company_id: req.thisuser.company_id};
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
 
   models.vod_subtitles.findAll({
@@ -572,7 +572,7 @@ exports.subtitles = function (req, res) {
         model: models.vod,
         required: true,
         attributes: [],
-        where: {pin_protected: {in: allowed_content}, isavailable: true, expiration_time: {$gte: Date.now()}},
+        where: {pin_protected: {[Op.in]: allowed_content}, isavailable: true, expiration_time: {[Op.gte]: Date.now()}},
         include: [
           {model: models.vod_stream, required: true, attributes: []},
           {
@@ -581,7 +581,7 @@ exports.subtitles = function (req, res) {
               model: models.vod_category,
               required: true,
               attributes: [],
-              where: {password: {in: allowed_content}, isavailable: true}
+              where: {password: {[Op.in]: allowed_content}, isavailable: true}
             }]
           },
           {
@@ -595,7 +595,7 @@ exports.subtitles = function (req, res) {
                 model: models.subscription,
                 required: true,
                 attributes: [],
-                where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
               }]
             }]
           }
@@ -645,7 +645,7 @@ exports.subtitles_get = function (req, res) {
         model: models.vod,
         required: true,
         attributes: [],
-        where: {pin_protected: {in: allowed_content}, isavailable: true, expiration_time: {$gte: Date.now()}},
+        where: {pin_protected: {[Op.in]: allowed_content}, isavailable: true, expiration_time: {[Op.gte]: Date.now()}},
         include: [
           {model: models.vod_stream, required: true, attributes: []},
           {
@@ -654,7 +654,7 @@ exports.subtitles_get = function (req, res) {
               model: models.vod_category,
               required: true,
               attributes: [],
-              where: {password: {in: allowed_content}, isavailable: true}
+              where: {password: {[Op.in]: allowed_content}, isavailable: true}
             }]
           },
           {
@@ -668,7 +668,7 @@ exports.subtitles_get = function (req, res) {
                 model: models.subscription,
                 required: true,
                 attributes: [],
-                where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
               }]
             }]
           }
@@ -707,7 +707,7 @@ exports.subtitles_get = function (req, res) {
  */
 exports.totalhits = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   //if hits for a specific movie are requested
   if (req.body.id_vod != "all") {
@@ -715,10 +715,10 @@ exports.totalhits = function (req, res) {
       attributes: [['id', 'id_vod'], ['clicks', 'hits']],
       where: {
         id: req.body.id_vod,
-        pin_protected: {in: allowed_content},
+        pin_protected: {[Op.in]: allowed_content},
         adult_content: show_adult,
         isavailable: true,
-        expiration_time: {$gte: Date.now()},
+        expiration_time: {[Op.gte]: Date.now()},
         company_id: req.thisuser.company_id
       },
       include: [
@@ -729,7 +729,7 @@ exports.totalhits = function (req, res) {
             model: models.vod_category,
             required: true,
             attributes: [],
-            where: {password: {in: allowed_content}, isavailable: true}
+            where: {password: {[Op.in]: allowed_content}, isavailable: true}
           }]
         }]
     }).then(function (result) {
@@ -744,9 +744,9 @@ exports.totalhits = function (req, res) {
     models.vod.findAll({
       attributes: [['id', 'id_vod'], ['clicks', 'hits']],
       where: {
-        pin_protected: {in: allowed_content},
+        pin_protected: {[Op.in]: allowed_content},
         isavailable: true,
-        expiration_time: {$gte: Date.now()},
+        expiration_time: {[Op.gte]: Date.now()},
         company_id: req.thisuser.company_id
       },
       include: [
@@ -757,7 +757,7 @@ exports.totalhits = function (req, res) {
             model: models.vod_category,
             required: true,
             attributes: [],
-            where: {password: {in: allowed_content}, isavailable: true}
+            where: {password: {[Op.in]: allowed_content}, isavailable: true}
           }]
         },
         {
@@ -771,7 +771,7 @@ exports.totalhits = function (req, res) {
               model: models.subscription,
               required: true,
               attributes: [],
-              where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+              where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
             }]
           }]
         }
@@ -809,7 +809,7 @@ exports.totalhits = function (req, res) {
  */
 exports.mostwatched = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   //if hits for a specific movie are requested
   models.vod.findAll({
@@ -817,10 +817,10 @@ exports.mostwatched = function (req, res) {
     limit: 30, subQuery: false,
     order: [['clicks', 'DESC']],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -831,7 +831,7 @@ exports.mostwatched = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -843,7 +843,7 @@ exports.mostwatched = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -883,7 +883,7 @@ exports.mostwatched = function (req, res) {
  */
 exports.mostwatched_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   //if hits for a specific movie are requested
   models.vod.findAll({
@@ -891,10 +891,10 @@ exports.mostwatched_get = function (req, res) {
     limit: 30, subQuery: false,
     order: [['clicks', 'DESC']],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -905,7 +905,7 @@ exports.mostwatched_get = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -917,7 +917,7 @@ exports.mostwatched_get = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -951,16 +951,16 @@ exports.mostwatched_get = function (req, res) {
  */
 exports.mostrated = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   //if most rated movies are requested
   models.vod.findAll({
     attributes: ['id', 'rate'], order: [['rate', 'DESC']],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     limit: 30, subQuery: false,
@@ -972,7 +972,7 @@ exports.mostrated = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -984,7 +984,7 @@ exports.mostrated = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1024,16 +1024,16 @@ exports.mostrated = function (req, res) {
  */
 exports.mostrated_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   //if most rated movies are requested
   models.vod.findAll({
     attributes: ['id', 'rate'], order: [['rate', 'DESC']],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     limit: 30, subQuery: false,
@@ -1045,7 +1045,7 @@ exports.mostrated_get = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -1057,7 +1057,7 @@ exports.mostrated_get = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1149,7 +1149,7 @@ exports.related = function (req, res) {
         for (let i = 0; i < related_result[0].length; i++) {
           response_data[i] = {"id": related_result[0][i].id.toString()};
         }
-        response.send_res(req, res, response_data, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'no-store');
+        response.send_res(req, res, response_data, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'private,max-age=86400');
       }
     }).catch(function (error) {
       winston.error("Getting the list of related movies failed with error: ", error);
@@ -1180,15 +1180,15 @@ exports.related = function (req, res) {
  */
 exports.suggestions = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod.findAll({
     attributes: ['id'],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -1199,7 +1199,7 @@ exports.suggestions = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}, isavailable: true}
+          where: {password: {[Op.in]: allowed_content}, isavailable: true}
         }]
       },
       {
@@ -1210,7 +1210,7 @@ exports.suggestions = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1242,15 +1242,15 @@ exports.suggestions = function (req, res) {
  */
 exports.suggestions_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod.findAll({
     attributes: ['id'],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -1261,7 +1261,7 @@ exports.suggestions_get = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}, isavailable: true}
+          where: {password: {[Op.in]: allowed_content}, isavailable: true}
         }]
       },
       {
@@ -1272,7 +1272,7 @@ exports.suggestions_get = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1305,15 +1305,15 @@ exports.suggestions_get = function (req, res) {
  */
 exports.categoryfilms = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod.findAll({
     attributes: ['id'],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -1327,7 +1327,7 @@ exports.categoryfilms = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -1339,7 +1339,7 @@ exports.categoryfilms = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1378,15 +1378,15 @@ exports.categoryfilms = function (req, res) {
  */
 exports.categoryfilms_get = function (req, res) {
   const allowed_content = (req.thisuser.show_adult === true) ? [0, 1] : [0];
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod.findAll({
     attributes: ['id'],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -1400,7 +1400,7 @@ exports.categoryfilms_get = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}},
+          where: {password: {[Op.in]: allowed_content}},
           isavailable: true
         }]
       },
@@ -1412,7 +1412,7 @@ exports.categoryfilms_get = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
@@ -1449,10 +1449,10 @@ exports.categoryfilms_get = function (req, res) {
  */
 exports.get_vod_item_details = function (req, res) {
   const vodID = req.params.vodID;
-  models.vod.find({
+  models.vod.findOne({
     where: {
       id: vodID,
-      expiration_time: {$gte: Date.now()},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     },
     include: [
@@ -1468,7 +1468,7 @@ exports.get_vod_item_details = function (req, res) {
         model: models.vod_stream,
         where: {
           stream_source_id: req.thisuser.vod_stream_source,
-          stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+          stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
         }
       }
     ]
@@ -1505,6 +1505,7 @@ exports.get_vod_item_details = function (req, res) {
       raw_obj[0].TokenUrl = result.vod_streams[0].token_url;
       raw_obj[0].encryption = (result.vod_streams[0].encryption) ? "1" : "0";
       raw_obj[0].encryption_url = result.vod_streams[0].encryption_url;
+      raw_obj[0].thumbnail_url = result.vod_streams[0].thumbnail_url;
 
       response.send_res_get(req, res, raw_obj, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'private,max-age=86400');
 
@@ -1538,7 +1539,7 @@ exports.get_tvshow_item_details = function (req, res) {
   else
     where_seasonNumber.season_number = 1;
 
-  models.tv_series.find({
+  models.tv_series.findOne({
     attributes: ['id', [sequelize.literal('"film"'), 'tv_series'], 'title', 'icon_url', 'image_url', 'rate', 'trailer_url', 'pin_protected',
       [db.sequelize.fn('YEAR', db.sequelize.col('tv_series.release_date')), "year"],
       [db.sequelize.fn('concat', db.sequelize.col('tv_series.description'), '<p><strong>Director:</strong> ', db.sequelize.col('tv_series.director'),
@@ -1546,12 +1547,12 @@ exports.get_tvshow_item_details = function (req, res) {
       [db.sequelize.fn('concat', req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('tv_series.icon_url')), 'icon'],
       [db.sequelize.fn('concat', req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('tv_series.image_url')), 'largeimage']
     ],
-    where: {id: vodID, expiration_time: {$gte: Date.now()}, company_id: req.thisuser.company_id},
+    where: {id: vodID, expiration_time: {[Op.gte]: Date.now()}, company_id: req.thisuser.company_id},
     include: [
       {
         model: models.tv_season,
         attributes: ['id', 'season_number', 'title'],
-        where: {expiration_time: {$gte: Date.now()}}
+        where: {expiration_time: {[Op.gte]: Date.now()}}
       },
       {
         model: models.tv_series_categories, where: {is_available: true}, attributes: ['id'],
@@ -1580,12 +1581,12 @@ exports.get_tvshow_item_details = function (req, res) {
             '</p><p><strong>Starring:</strong> ', db.sequelize.col('tv_episode.cast'), '</p>'), 'description'],
           [db.sequelize.fn('concat', req.app.locals.backendsettings[req.thisuser.company_id].assets_url, db.sequelize.col('tv_episode.icon_url')), 'icon']
         ],
-        where: {tv_season_id: season_id, expiration_time: {$gte: Date.now()}},
+        where: {tv_season_id: season_id, expiration_time: {[Op.gte]: Date.now()}},
         include: [{
           model: models.tv_episode_stream,
           where: {
             stream_source_id: req.thisuser.vod_stream_source,
-            stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+            stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
           },
           attributes: []
         }]
@@ -1667,7 +1668,7 @@ exports.get_vod_item_related = function (req, res) {
 
       const offset = isNaN(parseInt(req.query._start)) ? 0 : parseInt(req.query._start);
       const limit = isNaN(parseInt(req.query._end)) ? req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr : parseInt(req.query._end) - offset;
-      const order_by = (req.query._orderBy) ? escape.col(req.query._orderBy) + ' ' + escape.orderDir(req.query._orderDir) : "matching_score DESC";
+      const order_by = (req.query._orderBy) ? [[escape.col(req.query._orderBy), escape.orderDir(req.query._orderDir)]] : "matching_score DESC";
       const related_query = "SELECT DISTINCT CAST(vod.id AS CHAR) AS id, vod.title, 'film' as vod_type, " +
         "CONCAT(vod.description, '<p><strong>Director:</strong> ', vod.director, ' </p><p><strong>Starring:</strong> ', vod.starring, '</p>') AS description, vod.rate, vod.duration, " +
         "vod.pin_protected, YEAR(vod.release_date) as year, UNIX_TIMESTAMP(vod.createdAt) as dataadded, CONCAT('" + req.app.locals.backendsettings[req.thisuser.company_id].assets_url + "', vod.icon_url) AS icon, " +
@@ -1728,7 +1729,7 @@ exports.get_vod_item_related = function (req, res) {
 exports.get_vod_items_recommended = function (req, res) {
   //find the user's active vod packages
   models.subscription.findAll({
-    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}, group: ['package_id'],
+    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}, group: ['package_id'],
     include: [{
       model: models.package,
       required: true,
@@ -1763,10 +1764,10 @@ exports.get_vod_items_recommended = function (req, res) {
       qwhere.where.isavailable = 1;
       qwhere.offset = isNaN(parseInt(query._start)) ? 0 : parseInt(query._start);
       qwhere.limit = isNaN(parseInt(query._end)) ? req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr : parseInt(query._end) - qwhere.offset;
-      qwhere.where.expiration_time = {$gte: Date.now()};
+      qwhere.where.expiration_time = {[Op.gte]: Date.now()};
       qwhere.where.company_id = req.thisuser.company_id;
 
-      if (query._orderBy) qwhere.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+      if (query._orderBy) qwhere.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
       qwhere.include = [
         {
           model: models.vod_stream,
@@ -1774,7 +1775,7 @@ exports.get_vod_items_recommended = function (req, res) {
           attributes: [],
           where: {
             stream_source_id: req.thisuser.vod_stream_source,
-            stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+            stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
           }
         },
         {
@@ -1784,7 +1785,7 @@ exports.get_vod_items_recommended = function (req, res) {
           where: {is_available: true},
           include: [{model: models.vod_category, attributes: ['name']}]
         },
-        {model: models.package_vod, required: true, attributes: [], where: {package_id: {in: package_list}}}
+        {model: models.package_vod, required: true, attributes: [], where: {package_id: {[Op.in]: package_list}}}
       ]; //exclude films without streams or from other stream sources
 
       models.vod.findAndCountAll(
@@ -1848,7 +1849,7 @@ exports.get_vod_items_recommended = function (req, res) {
 exports.get_vod_list = function (req, res) {
   //find the user's active vod packages
   models.subscription.findAll({
-    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}, group: ['package_id'],
+    attributes: ['package_id'], where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}, group: ['package_id'],
     include: [{
       model: models.package,
       required: true,
@@ -1873,15 +1874,15 @@ exports.get_vod_list = function (req, res) {
             let vod_final_where = {include: [], where: {}}, query = req.query;
             if (req.query.q) {
               vod_final_where.where = {
-                $or: {
-                  title: {$like: '%' + query.q + '%'},
-                  description: {$like: '%' + query.q + '%'},
-                  director: {$like: '%' + query.q + '%'}
+                [Op.or]: {
+                  title: {[Op.like]: '%' + query.q + '%'},
+                  description: {[Op.like]: '%' + query.q + '%'},
+                  director: {[Op.like]: '%' + query.q + '%'}
                 }
               };
             }
 
-            vod_final_where.where.expiration_time = {$gte: Date.now()};
+            vod_final_where.where.expiration_time = {[Op.gte]: Date.now()};
             if (!req.query.show_adult || req.query.show_adult !== 'true') vod_final_where.where.adult_content = false;
             const allowed_content = ((req.thisuser.show_adult === true) && (req.query.pin_protected === '1')) ? [0, 1] : [0];
             const category_where = (req.query.category) ? {
@@ -1891,26 +1892,26 @@ exports.get_vod_list = function (req, res) {
 
             //filter films added in the following time interval
             if (query.added_before && query.added_after) vod_final_where.where.createdAt = {
-              lt: query.added_before,
-              gt: query.added_after
+              [Op.lt]: query.added_before,
+              [Op.gt]: query.added_after
             };
-            else if (query.added_before) vod_final_where.where.createdAt = {lt: query.added_before};
-            else if (query.added_after) vod_final_where.where.createdAt = {gt: query.added_after};
+            else if (query.added_before) vod_final_where.where.createdAt = {[Op.gt]: query.added_before};
+            else if (query.added_after) vod_final_where.where.createdAt = {[Op.gt]: query.added_after};
 
             //filter films updated in the following time interval
             if (query.updated_before && query.updated_after) vod_final_where.where.createdAt = {
-              lt: query.updated_before,
-              gt: query.updated_after
+              [Op.lt]: query.updated_before,
+              [Op.gt]: query.updated_after
             };
-            else if (query.updated_before) vod_final_where.where.updatedAt = {lt: query.updated_before};
-            else if (query.updated_after) vod_final_where.where.updatedAt = {gt: query.updated_after};
+            else if (query.updated_before) vod_final_where.where.updatedAt = {[Op.gt]: query.updated_before};
+            else if (query.updated_after) vod_final_where.where.updatedAt = {[Op.gt]: query.updated_after};
 
             vod_final_where.offset = isNaN(parseInt(query._start)) ? 0 : parseInt(query._start);
             vod_final_where.limit = isNaN(parseInt(query._end)) ? req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr : parseInt(query._end) - vod_final_where.offset;
 
             if (query._orderBy === 'createdAt') {
               vod_final_where.order = 'dataadded' + ' ' + escape.orderDir(query._orderDir);
-            } else if (query._orderBy) vod_final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+            } else if (query._orderBy) vod_final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
 
             vod_final_where.where.isavailable = true;
@@ -1928,7 +1929,7 @@ exports.get_vod_list = function (req, res) {
                 attributes: ['id'],
                 where: {
                   stream_source_id: req.thisuser.vod_stream_source,
-                  stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+                  stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
                 }
               },
               {
@@ -1945,7 +1946,7 @@ exports.get_vod_list = function (req, res) {
                 where: {is_available: true},
                 include: [{model: models.vod_category, attributes: ['name']}]
               },
-              {model: models.package_vod, required: true, attributes: [], where: {package_id: {$in: package_list}}}
+              {model: models.package_vod, required: true, attributes: [], where: {package_id: {[Op.in]: package_list}}}
             ];
             models.vod.findAndCountAll(
               vod_final_where
@@ -1986,15 +1987,15 @@ exports.get_vod_list = function (req, res) {
             let tv_shows_final_where = {include: [], where: {}}, query = req.query;
             if (req.query.q) {
               tv_shows_final_where.where = {
-                $or: {
-                  title: {$like: '%' + query.q + '%'},
-                  description: {$like: '%' + query.q + '%'},
-                  director: {$like: '%' + query.q + '%'}
+                [Op.or]: {
+                  title: {[Op.like]: '%' + query.q + '%'},
+                  description: {[Op.like]: '%' + query.q + '%'},
+                  director: {[Op.like]: '%' + query.q + '%'}
                 }
               };
             }
 
-            tv_shows_final_where.where.expiration_time = {$gte: Date.now()};
+            tv_shows_final_where.where.expiration_time = {[Op.gte]: Date.now()};
             if (!req.query.show_adult || req.query.show_adult !== 'true') tv_shows_final_where.where.adult_content = false;
             const allowed_content = ((req.thisuser.show_adult === true) && (req.query.pin_protected === '1')) ? [0, 1] : [0];
             const category_where = (req.query.category) ? {
@@ -2004,26 +2005,26 @@ exports.get_vod_list = function (req, res) {
 
             //filter films added in the following time interval
             if (query.added_before && query.added_after) tv_shows_final_where.where.createdAt = {
-              lt: query.added_before,
-              gt: query.added_after
+              [Op.lt]: query.added_before,
+              [Op.gt]: query.added_after
             };
-            else if (query.added_before) tv_shows_final_where.where.createdAt = {lt: query.added_before};
-            else if (query.added_after) tv_shows_final_where.where.createdAt = {gt: query.added_after};
+            else if (query.added_before) tv_shows_final_where.where.createdAt = {[Op.gt]: query.added_before};
+            else if (query.added_after) tv_shows_final_where.where.createdAt = {[Op.gt]: query.added_after};
 
             //filter films updated in the following time interval
             if (query.updated_before && query.updated_after) tv_shows_final_where.where.createdAt = {
-              lt: query.updated_before,
-              gt: query.updated_after
+              [Op.lt]: query.updated_before,
+              [Op.gt]: query.updated_after
             };
-            else if (query.updated_before) tv_shows_final_where.where.updatedAt = {lt: query.updated_before};
-            else if (query.updated_after) tv_shows_final_where.where.updatedAt = {gt: query.updated_after};
+            else if (query.updated_before) tv_shows_final_where.where.updatedAt = {[Op.gt]: query.updated_before};
+            else if (query.updated_after) tv_shows_final_where.where.updatedAt = {[Op.gt]: query.updated_after};
 
             tv_shows_final_where.offset = isNaN(parseInt(query._start)) ? 0 : parseInt(query._start);
             tv_shows_final_where.limit = isNaN(parseInt(query._end)) ? req.app.locals.backendsettings[req.thisuser.company_id].vod_subset_nr : parseInt(query._end) - tv_shows_final_where.offset;
 
             if (query._orderBy === 'createdAt') {
-              tv_shows_final_where.order = 'dataadded' + ' ' + escape.orderDir(query._orderDir);
-            } else if (query._orderBy) tv_shows_final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+              tv_shows_final_where.order = [['dataadded', escape.orderDir(query._orderDir)]];
+            } else if (query._orderBy) tv_shows_final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
 
             tv_shows_final_where.where.is_available = true;
@@ -2047,7 +2048,7 @@ exports.get_vod_list = function (req, res) {
                 model: models.tv_series_packages,
                 required: true,
                 attributes: [],
-                where: {package_id: {$in: package_list}}
+                where: {package_id: {[Op.in]: package_list}}
               }
             ];
             models.tv_series.findAndCountAll(
@@ -2117,7 +2118,7 @@ exports.get_vod_list = function (req, res) {
  */
 exports.searchvod = function (req, res) {
   const allowed_content = ((req.thisuser.show_adult === true) && (req.query.pin_protected === "1")) ? [0, 1] : [0];
-  const show_adult = (req.body.show_adult === 'true') ? {$in: [true, false]} : false; //adult content returned only if request explicitly asks for it
+  const show_adult = (req.body.show_adult === 'true') ? {[Op.in]: [true, false]} : false; //adult content returned only if request explicitly asks for it
 
   models.vod.findAll({
     attributes: ['id', 'title'],
@@ -2129,7 +2130,7 @@ exports.searchvod = function (req, res) {
           model: models.vod_category,
           required: true,
           attributes: [],
-          where: {password: {in: allowed_content}, isavailable: true}
+          where: {password: {[Op.in]: allowed_content}, isavailable: true}
         }]
       },
       {
@@ -2140,17 +2141,17 @@ exports.searchvod = function (req, res) {
             model: models.subscription,
             required: true,
             attributes: [],
-            where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+            where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
           }]
         }]
       }
     ],
     where: {
-      pin_protected: {in: allowed_content},
+      pin_protected: {[Op.in]: allowed_content},
       adult_content: show_adult,
       isavailable: true,
-      title: {$like: "%" + sqlstring.escape(req.body.search_string.trim()).slice(1, -1) + "%"},
-      expiration_time: {$gte: Date.now()},
+      title: {[Op.like]: "%" + sqlstring.escape(req.body.search_string.trim()).slice(1, -1) + "%"},
+      expiration_time: {[Op.gte]: Date.now()},
       company_id: req.thisuser.company_id
     }
 
@@ -2243,7 +2244,7 @@ exports.get_movie_details = function (req, res) {
         attributes: ['stream_format', 'url', 'token', 'token_url', 'encryption', 'encryption_url'],
         where: {
           stream_source_id: req.thisuser.vod_stream_source,
-          stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+          stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
         }
       },
       {
@@ -2296,6 +2297,7 @@ exports.get_movie_details = function (req, res) {
       vod_data.TokenUrl = (result.vod_streams[0] && result.vod_streams[0].token_url) ? result.vod_streams[0].token_url : "";
       vod_data.encryption = (result.vod_streams[0] && result.vod_streams[0].encryption) ? "1" : "0";
       vod_data.encryption_url = (result.vod_streams[0] && result.vod_streams[0].encryption_url) ? result.vod_streams[0].encryption_url : "";
+      vod_data.thumbnail_url = (result.vod_streams[0] && result.vod_streams[0].thumbnail_url) ? result.vod_streams[0].thumbnail_url : "";
 
       vod_data.subtitles = vod_data.vod_subtitles;
       delete vod_data.vod_subtitles;
@@ -2332,20 +2334,20 @@ exports.get_tv_series_data = function (req, res) {
   else
     where_seasonNumber.season_number = 1;
 
-  const show_adult = (req.query.show_adult === 'true') ? {$in: [true, false]} : false;
-  const pin_protected = (req.query.pin_protected === 'true') ? {$in: [true, false]} : false;
+  const show_adult = (req.query.show_adult === 'true') ? {[Op.in]: [true, false]} : false;
+  const pin_protected = (req.query.pin_protected === 'true') ? {[Op.in]: [true, false]} : false;
 
-  models.tv_series.find({
+  models.tv_series.findOne({
     attributes: ['id', [sequelize.literal('"tv_series"'), 'vod_type']],
     where: {
-      id: vodID, expiration_time: {$gte: Date.now(), company_id: req.thisuser.company_id}
+      id: vodID, expiration_time: {[Op.gte]: Date.now(), company_id: req.thisuser.company_id}
     },
     include: [
       {
         model: models.tv_season,
         attributes: ['id', 'season_number', 'title', [sequelize.literal('"tv_season"'), 'vod_type']],
         where: {
-          expiration_time: {$gte: Date.now()},
+          expiration_time: {[Op.gte]: Date.now()},
           is_available: true,
           adult_content: show_adult,
           pin_protected: show_adult
@@ -2383,7 +2385,7 @@ exports.get_tv_series_data = function (req, res) {
         ],
         where: {
           tv_season_id: season_id,
-          expiration_time: {$gte: Date.now()},
+          expiration_time: {[Op.gte]: Date.now()},
           is_available: true,
           adult_content: show_adult,
           pin_protected: show_adult,
@@ -2394,7 +2396,7 @@ exports.get_tv_series_data = function (req, res) {
             model: models.tv_episode_stream,
             where: {
               stream_source_id: req.thisuser.vod_stream_source,
-              stream_resolution: {$like: "%" + req.auth_obj.appid + "%"}
+              stream_resolution: {[Op.like]: "%" + req.auth_obj.appid + "%"}
             },
             attributes: []
           }

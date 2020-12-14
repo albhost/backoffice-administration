@@ -23,11 +23,8 @@ module.exports = function(app) {
     app.route('/api/channelstreamsources/:channelStreamSourceId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(channelStreamSources.dataByID)
         .get(channelStreamSources.read)
         .put(channelStreamSources.update)
         .delete(channelStreamSources.delete);
-
-    app.param('channelStreamSourceId', channelStreamSources.dataByID);
-
-
 };

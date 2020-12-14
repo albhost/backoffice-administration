@@ -1,14 +1,12 @@
 var path = require('path'),
-    crypto = require("crypto"),
     sequelize_t = require(path.resolve('./config/lib/sequelize')),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    subscription = db.subscription,
     dateFormat = require('dateformat'),
     moment = require('moment'),
     response = require(path.resolve("./config/responses.js")),
     eventSystem = require(path.resolve("./config/lib/event_system.js")),
     winston = require(path.resolve('./config/lib/winston'));
-
+const { Op } = require('sequelize');
 
 function add_subscription(req, res, login_id, combo_id, username){
     db.combo.findAll({
@@ -110,9 +108,9 @@ exports.add_subscription_transaction = function(req,res,sale_or_refund,transacti
             return db.login_data.findOne({
                 where: {
                     company_id: company_id,
-                    $or: {
-                        username: req.body.username,
-                        id: req.body.login_data_id
+                    [Op.or]: {
+                        username: req.body.username ? req.body.username : null,
+                        id: req.body.login_data_id ? req.body.login_data_id : null
                     }
                 }, include: [{model: db.customer_data}, {model: db.subscription}]
             }).then(function (loginData) {

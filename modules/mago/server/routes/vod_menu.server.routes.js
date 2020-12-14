@@ -16,9 +16,8 @@ module.exports = function(app) {
     app.route('/api/vodmenu/:vodmenuId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vodmenu.dataByID)
         .get(vodmenu.read)
         .put(vodmenu.update)
         .delete(vodmenu.delete);
-
-    app.param('vodmenuId', vodmenu.dataByID);
 };

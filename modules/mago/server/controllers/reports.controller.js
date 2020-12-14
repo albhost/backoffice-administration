@@ -13,7 +13,7 @@ LoginData = db.login_data;
 Combo = db.combo;
 SalesReport = db.salesreport;
 DBModel = db.salesreport;
-
+const { Op } = require('sequelize');
 /**
  * List of Subscribers
  * */
@@ -70,7 +70,7 @@ exports.expiringNextWeek = function(req, res) {
         include:[
             {model: db.customer_data},
             {model:db.subscription, where:{end_date:{
-                $between:[
+                [Op.between]:[
                     new Date().getNextWeekMonday(),
                     new Date().getNextWeekSunday()
                 ]
@@ -381,6 +381,31 @@ exports.activeDevices = function (req, res) {
     });
 };
 
+exports.allActiveDevices = function (req,res){
+    let company_id = req.token.company_id ? req.token.company_id : 1;
+    dbRaporte.sequelize.query(`SELECT *
+        FROM (select id, DATE(createdAt) as date, COUNT(id) as total, appid
+      from devices
+      where createdAt >= DATE_SUB(now(), INTERVAL 12 MONTH)
+        and company_id = ?
+      GROUP BY (appid), appid) a;`,
+        {type: dbRaporte.sequelize.QueryTypes.SELECT, replacements: [company_id]})
+        .then(function (results) {
+            if (!results) {
+                return res.status(404).send({
+                    message: 'No data found'
+                });
+            } else {
+                res.json(results);
+            }
+        }).catch(function (err) {
+        winston.error("Getting sales failed with error: ", err);
+        res.jsonp(err);
+    });
+}
+
+
+
 
 exports.listLastTwoYearsSales = function (req, res) {
     let company_id = req.token.company_id ? req.token.company_id : 1;
@@ -425,17 +450,17 @@ exports.listEachDaySales = function (req, res) {
     if (req.query.active === 'active') final_where.where.active = true;
     if (req.query.active === 'cancelled') final_where.where.active = false;
 
-    if (req.query.startsaledate) final_where.where.saledate = {gte: req.query.startsaledate};
-    if (req.query.endsaledate) final_where.where.saledate = {lte: req.query.endsaledate};
+    if (req.query.startsaledate) final_where.where.saledate = {[Op.gte]: req.query.startsaledate};
+    if (req.query.endsaledate) final_where.where.saledate = {[Op.lte]: req.query.endsaledate};
 
     if ((req.query.startsaledate) && (req.query.endsaledate)) final_where.where.saledate = {
-        gte: req.query.startsaledate,
-        lte: req.query.endsaledate
+        [Op.gte]: req.query.startsaledate,
+        [Op.lte]: req.query.endsaledate
     };
 
     if (parseInt(query._start)) final_where.offset = parseInt(query._start);
     if (parseInt(query._end)) final_where.limit = parseInt(query._end) - parseInt(query._start);
-    if (query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+    if (query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
     final_where.attributes = ['id', 'combo_id', [sequelize.fn('max', sequelize.col('saledate')), 'saledate'], 'createdAt', [sequelize.fn('count', sequelize.col('combo_id')), 'count']];
     final_where.include = [{model: db.combo, required: true, attributes: ['name']}];

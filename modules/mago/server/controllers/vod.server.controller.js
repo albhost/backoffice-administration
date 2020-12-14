@@ -9,27 +9,29 @@ var path = require('path'),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     saas_functions = require(path.resolve('./custom_functions/saas_functions')),
     db = require(path.resolve('./config/lib/sequelize')).models,
+    sequelize = require('sequelize'),
     sequelize_t = require(path.resolve('./config/lib/sequelize')),
     DBModel = db.vod,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    request = require("request"),
     fs = require('fs'),
     escape = require(path.resolve('./custom_functions/escape'));
+const axios = require('axios').default;
+const { Op } = require('sequelize');
+const Joi = require("joi");
+
 
 function link_vod_with_genres(vod_id,array_category_ids, db_model, company_id) {
-    var transactions_array = [];
-    return db_model.update(
-        {
-            is_available: false
-        },
-        {
-            where: {
-                vod_id: vod_id,
-                category_id: {$notIn: array_category_ids},
-                company_id: company_id
-            }
-        }
-    ).then(function (result) {
+    let transactions_array = [];
+    const destroy_where = (array_category_ids.length > 0) ? {
+        vod_id: vod_id,
+        category_id: {[Op.notIn]: array_category_ids},
+        company_id: company_id
+    } : {
+        vod_id: vod_id,
+        company_id: company_id
+    };
+
+    return db_model.destroy({where: destroy_where})
+      .then(function (result) {
         return sequelize_t.sequelize.transaction(function (t) {
             for (var i = 0; i < array_category_ids.length; i++) {
                 transactions_array.push(
@@ -60,7 +62,7 @@ function link_vod_with_packages(item_id, data_array, model_instance, company_id)
     var transactions_array = [];
     var destroy_where = (data_array.length > 0) ? {
         vod_id: item_id,
-        package_id: {$notIn: data_array},
+        package_id: {[Op.notIn]: data_array},
         company_id: company_id
     } : {
         vod_id: item_id,
@@ -176,7 +178,7 @@ exports.update = function(req, res) {
     delete req.body.package_vods;
 
     if(req.vod.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             if(deletefile) {
                 fs.unlink(deletefile, function (err) {
                     //todo: return some warning
@@ -256,50 +258,53 @@ exports.list = function(req, res) {
         final_where = {},
         query = req.query;
 
-    var package_where = (query.not_id) ? {id: {$notIn: [query.not_id]}} : {id: {$gt: 0}};
-
-    if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.title = {};
-        qwhere.$or.title.$like = '%'+query.q+'%';
-        qwhere.$or.description = {};
-        qwhere.$or.description.$like = '%'+query.q+'%';
-        qwhere.$or.director = {};
-        qwhere.$or.director.$like = '%'+query.q+'%';
+    if (query.q) {
+        let filters = []
+        filters.push(
+            { title: { [Op.like]: `%${query.q}%` } },
+            { description: { [Op.like]: `%${query.q}%` } },
+            { director: { [Op.like]: `%${query.q}%` } },
+        );
+        qwhere = { [Op.or]: filters };
     }
-    if(query.title) qwhere.title = {like: '%'+query.title+'%'};
+    if(query.title) qwhere.title = {[Op.like]: '%'+query.title+'%'};
 
     //filter films added in the following time interval
-    if(query.added_before && query.added_after) qwhere.createdAt = {lt: query.added_before, gt: query.added_after};
-    else if(query.added_before) qwhere.createdAt = {lt: query.added_before};
-    else if(query.added_after) qwhere.createdAt = {gt: query.added_after};
+    if(query.added_before && query.added_after) qwhere.createdAt = {[Op.lt]: query.added_before, [Op.gt]: query.added_after};
+    else if(query.added_before) qwhere.createdAt = {[Op.lt]: query.added_before};
+    else if(query.added_after) qwhere.createdAt = {[Op.gt]: query.added_after};
     //filter films updated in the following time interval
-    if(query.updated_before && query.updated_after) qwhere.createdAt = {lt: query.updated_before, gt: query.updated_after};
-    else if(query.updated_before) qwhere.createdAt = {lt: query.updated_before};
-    else if(query.updated_after) qwhere.createdAt = {gt: query.updated_after};
+    if(query.updated_before && query.updated_after) qwhere.createdAt = {[Op.lt]: query.updated_before, [Op.gt]: query.updated_after};
+    else if(query.updated_before) qwhere.createdAt = {[Op.lt]: query.updated_before};
+    else if(query.updated_after) qwhere.createdAt = {[Op.gt]: query.updated_after};
     if(query.expiration_time) qwhere.expiration_time = query.expiration_time;
     if(query.isavailable === 'true') qwhere.isavailable = true;
     else if(query.isavailable === 'false') qwhere.isavailable = false;
     if(query.pin_protected === '1') qwhere.pin_protected = true;
     else if(query.pin_protected === '0') qwhere.pin_protected = false;
 
-    //start building where
+    final_where.attributes = [ 'id', 'company_id','imdb_id','title','original_title', 'description', 'tagline', 'homepage', 'spoken_languages',[sequelize_t.sequelize.fn("concat", req.app.locals.backendsettings[req.token.company_id].assets_url, sequelize_t.sequelize.col('vod.icon_url')), 'icon_url'],
+        [sequelize_t.sequelize.fn("concat", req.app.locals.backendsettings[req.token.company_id].assets_url, sequelize_t.sequelize.col('vod.image_url')), 'image_url'],
+        'clicks', 'rate', 'vote_average','vote_count', 'popularity', 'duration','director', 'starring', 'trailer_url', 'vod_preview_url', 'pin_protected', 'adult_content', 'isavailable', 'default_subtitle_id',
+        'expiration_time', 'price', 'mandatory_ads', 'revenue', 'budget', 'original_language', 'release_date', 'status', 'createdAt', 'updatedAt'],
+
+        //start building where
     final_where.where = qwhere;
     if(parseInt(query._end) !== -1){
         if(parseInt(query._start)) final_where.offset = parseInt(query._start);
         if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
     }
-    if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+    if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
     else final_where.order = [['createdAt', 'DESC']];
 
     var package_filter = (req.query.package_id) ? {
         where: {package_id: Number(req.query.package_id)},
         required: true
-    } : {where: {package_id: {gt: 0}}, required: false};
+    } : {where: {package_id: {[Op.gt]: 0}}, required: false};
     var category_filter = (req.query.category) ? {
         where: {category_id: Number(req.query.category), is_available: true},
         required: true
-    } : {where: {category_id: {gt: 0}, is_available: true}, required: false};
+    } : {where: {category_id: {[Op.gt]: 0}, is_available: true}, required: false};
 
     final_where.include = [
         {
@@ -326,7 +331,7 @@ exports.list = function(req, res) {
             //prepare array with id's of all vod items that belong to specified package
             var excluded_item_list = [];
             for(var i=0; i<excluded_vod_items.length; i++) excluded_item_list.push(excluded_vod_items[i].vod_id);
-            if(excluded_item_list.length > 0) qwhere.id = {$notIn: excluded_item_list}; //if there are items to be excluded, add notIn filter
+            if(excluded_item_list.length > 0) qwhere.id = {[Op.notIn]: excluded_item_list}; //if there are items to be excluded, add notIn filter
 
             DBModel.findAndCountAll(final_where).then(function(results) {
                 if (!results) return res.status(404).send({message: 'No data found'});
@@ -365,35 +370,69 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function (req, res, next) {
+    const COMPANY_ID = req.token.company_id || 1;
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.vodId);
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
+            id: value
         },
         include: [
             {model: db.vod_vod_categories, where: {is_available: true}, required: false}, //outer join, to display also movies that don't belong to any category
-            {model: db.package_vod, required: false},{model: db.vod_subtitles, attributes: ['id', 'title', ['id', 'value'], ['title', 'label']]},{model: db.vod_stream}
+            {model: db.package_vod, required: false}, {
+                model: db.vod_subtitles,
+                attributes: ['id', 'title', ['id', 'value'], ['title', 'label']]
+            }, {model: db.vod_stream}
         ]
-    }).then(function(result) {
+    }).then(function (result) {
         if (!result) {
             return res.status(404).send({
                 message: 'No data with that identifier has been found'
             });
         } else {
             req.vod = result;
+            let protocol = new RegExp('^(https?|ftp)://');
+            if (protocol.test(req.body.icon_url)) {
+                let url = req.body.icon_url;
+                let pathname = new URL(url).pathname;
+                req.body.icon_url = pathname;
+            } else {
+                req.vod.icon_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.icon_url;
+            }
+
+            let protocol_small_icon = new RegExp('^(https?|ftp)://');
+            if (protocol_small_icon.test(req.body.image_url)) {
+                let url = req.body.image_url;
+                let pathname = new URL(url).pathname;
+                req.body.image_url = pathname;
+            } else {
+                req.vod.image_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.image_url;
+            }
+
+            let protocol_vod_preview_url = new RegExp('^(https?|ftp)://');
+            if (protocol_vod_preview_url.test(req.body.vod_preview_url)) {
+                let url = req.body.vod_preview_url;
+                let pathname = new URL(url).pathname;
+                req.body.vod_preview_url= pathname;
+            } else {
+                req.vod.vod_preview_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.vod_preview_url;
+            }
             next();
         }
         return null;
-    }).catch(function(err) {
+    }).catch(function (err) {
         winston.error("Error at vod", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting vod data'
+        });
     });
 
 };
@@ -482,53 +521,45 @@ exports.update_film = function(req, res) {
 
 };
 
-function omdbapi(vod_data, callback){
+async function omdbapi(vod_data, callback) {
+  let api_key = "a421091c"; //todo: dynamic value
+  let search_params = "";
+  if (vod_data.imdb_id) {
+    search_params = search_params + '&' + 'i=' + vod_data.imdb_id;
+  } else {
+    if (vod_data.vod_title) search_params = search_params + '&' + 't=' + vod_data.vod_title;
+    if (vod_data.year) search_params = search_params + '&' + '&y=' + vod_data.year;
+  }
 
-    var api_key = "a421091c"; //todo: dynamic value
-    var search_params = "";
-    if(vod_data.imdb_id) search_params = search_params+'&'+'i='+vod_data.imdb_id;
-    else{
-        if(vod_data.vod_title) search_params = search_params+'&'+'t='+vod_data.vod_title;
-        if(vod_data.year) search_params = search_params+'&'+'&y='+vod_data.year;
-    }
-
-    if(search_params !== ""){
-        var options = {
-            url: 'http://www.omdbapi.com/?apikey='+api_key+search_params,
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+  if (search_params !== "") {
+    try {
+      const options = {
+        url: 'http://www.omdbapi.com/?apikey=' + api_key + search_params,
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      };
+      let response = await axios(options);
+      try {
+        let vod_data = {
+          title: response.data.Title,
+          imdb_id: response.data.imdbID,
+          //category: JSON.parse(response.data).Genre, //todo:get categories list, match them with our list
+          description: response.data.Plot,
+          //icon_url: JSON.parse(response.data).Poster, //todo: check if url is valid. donwload + resize image. if successful, pass new filename as param
+          rate: parseInt(response.data.imdbRating),
+          duration: response.data.Runtime.replace(' min', ''),
+          director: response.data.Director,
+          starring: response.data.Actors,
+          //pin_protected: (['R', 'X', 'PG-13'].indexOf(JSON.parse(response.data).Rated) !== -1) ? 1 : 0 //todo: will this rate be taken into consideration?
         };
-
-        request(options, function (error, response, body) {
-            if(error){
-
-                callback(true, "An error occurred while trying to get this movie's data");
-            }
-            else try {
-                var vod_data = {
-                    title: JSON.parse(response.body).Title,
-                    imdb_id: JSON.parse(response.body).imdbID,
-                    //category: JSON.parse(response.body).Genre, //todo:get categories list, match them with our list
-                    description: JSON.parse(response.body).Plot,
-                    //icon_url: JSON.parse(response.body).Poster, //todo: check if url is valid. donwload + resize image. if successful, pass new filename as param
-                    rate: parseInt(JSON.parse(response.body).imdbRating),
-                    duration: JSON.parse(response.body).Runtime.replace(' min', ''),
-                    director: JSON.parse(response.body).Director,
-                    starring: JSON.parse(response.body).Actors,
-                    //pin_protected: (['R', 'X', 'PG-13'].indexOf(JSON.parse(response.body).Rated) !== -1) ? 1 : 0 //todo: will this rate be taken into consideration?
-                };
-                callback(null, vod_data);
-            }
-            catch(error){
-                callback(true, "Unable to parse response");
-            }
-
-        });
+        callback(null, vod_data);
+      } catch (error) {
+        callback(true, "Unable to parse response");
+      }
+    } catch (error) {
+      callback(true, "An error occurred while trying to get this movie's data");
     }
-    else{
-        callback(true, "Unable to find the movie specified by your keywords");
-    }
-
+  } else {
+    callback(true, "Unable to find the movie specified by your keywords");
+  }
 }

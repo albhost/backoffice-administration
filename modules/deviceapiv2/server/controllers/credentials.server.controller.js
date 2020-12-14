@@ -1,5 +1,5 @@
 'use strict';
-var path = require('path'),
+const path = require('path'),
   db = require(path.resolve('./config/lib/sequelize')),
   redisClient = require(path.resolve('./config/lib/redis')),
   securityConfig = require(path.resolve('./config/security/exprees.security.config')),
@@ -7,12 +7,11 @@ var path = require('path'),
   password_encryption = require(path.resolve('./modules/deviceapiv2/server/controllers/authentication.server.controller.js')),
   push_msg = require(path.resolve('./custom_functions/push_messages')),
   models = db.models;
-var async = require("async");
-var winston = require('winston');
+
+const winston = require('winston');
 const {RateLimiterRedis} = require('rate-limiter-flexible');
-
-
-
+const getClientIP = require(path.resolve('./custom_functions/getClientIP'))
+const { Op } = require('sequelize');
 
 //todo: remove , replaced by loginv2
 /**
@@ -48,7 +47,7 @@ exports.login = function (req, res) {
       device_brand: decodeURIComponent(req.body.devicebrand),
       screen_resolution: decodeURIComponent(req.body.screensize),
       api_version: decodeURIComponent(req.body.api_version),
-      device_ip: req.ip.replace('::ffff:', ''),
+      device_ip: getClientIP(req),
       os: decodeURIComponent(req.body.os)
     }).then(function (result) {
       var response_data = [{
@@ -87,14 +86,14 @@ exports.login = function (req, res) {
 
 
           models.devices.findOne({
-            where: {username: req.auth_obj.username, device_active: true, appid: {in: appids}}
+            where: {username: req.auth_obj.username, device_active: true, appid: {[Op.in]: appids}}
           }).then(function (device) {
             //if record is found then device is found
             if (device) {
               if (req.auth_obj.boxid == device.device_id) {
                 //same user login on same device
                 //update value of device_active, since a user is loging into this device
-                device.updateAttributes({
+                device.update({
                   login_data_id: users.id,
                   company_id: req.thisuser.company_id,
                   username: req.auth_obj.username,
@@ -109,7 +108,7 @@ exports.login = function (req, res) {
                   device_brand: decodeURIComponent(req.body.devicebrand),
                   screen_resolution: decodeURIComponent(req.body.screensize),
                   api_version: decodeURIComponent(req.body.api_version),
-                  device_ip: req.ip.replace('::ffff:', ''),
+                  device_ip: getClientIP(req),
                   os: decodeURIComponent(req.body.os)
                 }).then(function (result) {
                   var response_data = [{
@@ -145,7 +144,7 @@ exports.login = function (req, res) {
                 device_brand: decodeURIComponent(req.body.devicebrand),
                 screen_resolution: decodeURIComponent(req.body.screensize),
                 api_version: decodeURIComponent(req.body.api_version),
-                device_ip: req.ip.replace('::ffff:', ''),
+                device_ip: getClientIP(req),
                 os: decodeURIComponent(req.body.os)
               }).then(function (result) {
                 var response_data = [{
@@ -272,7 +271,7 @@ exports.logout_user = function (req, res) {
         where: {
           username: req.auth_obj.username,
           device_active: true,
-          appid: {in: appids},
+          appid: {[Op.in]: appids},
           login_data_id: req.thisuser.id,
           company_id: company_id
         }, //keshtu u ndryhsua, 16-7
@@ -341,6 +340,10 @@ exports.lock_account = function lock_account(login_id, username) {
 };
 
 
+/**
+ * @apiDefine header_auth
+ * @apiSuccess {string} auth The authentication token of user.
+ */
 /**
  * @api {get} /apiv2/credentials/company_list GetCompanyList
  * @apiName GetCompanyList
@@ -464,7 +467,7 @@ exports.loginv2 = function (req, res) {
         attributes:[],
         where: {app_group_id: app_group.app_group_id}
       }],
-      where: {username: req.auth_obj.username, device_active: true, device_id: {not: req.auth_obj.boxid}}
+      where: {login_data_id: req.thisuser.id, device_active: true, device_id: {[Op.not]: req.auth_obj.boxid}}
     }).then(function (device) {
 
       if (!device || device.length < Number(req.thisuser.max_login_limit)) {
@@ -483,19 +486,23 @@ exports.loginv2 = function (req, res) {
           device_brand: decodeURIComponent(req.body.devicebrand),
           screen_resolution: decodeURIComponent(req.body.screensize),
           api_version: decodeURIComponent(req.body.api_version),
-          device_ip: req.ip.replace('::ffff:', ''),
+          device_ip: getClientIP(req),
           os: decodeURIComponent(req.body.os),
           language: req.body.language,
           company_id: req.thisuser.company_id
           //googleappid:        req.body.googleappid
-        }).then(function (result) {
+        }).then(async (dev) => {
           var response_data = [{
             "encryption_key": req.app.locals.backendsettings[req.thisuser.company_id].new_encryption_key,
             "company_id": req.thisuser.company_id,
             "password_hash": req.thisuser.password
           }];
+          // check if media player is selected, to not update on every login
+          const mediaPlayerExist = await checkIfMediaPlayerIsSet(dev.id);
+          if (!mediaPlayerExist) {
+            await addDefaultMediaPlayer(dev.id, req.auth_obj.appid, req.thisuser.company_id)
+          }
           response.send_res(req, res, response_data, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'no-store');
-          return null;
         }).catch(function (error) {
           winston.error("device upsert error : ", error);
           response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
@@ -513,7 +520,6 @@ exports.loginv2 = function (req, res) {
     winston.error("Searching for the app group's data failed with error: ", error);
     response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION_7', 'DATABASE_ERROR_DATA', 'no-store');
   });
-
 };
 
 function upsertDevice(device) {
@@ -523,16 +529,16 @@ function upsertDevice(device) {
     }).then(function (result) {
       if (!result) {
         return models.devices.create(device)
-          .then(function () {
-            resolve();
+          .then(function (dev) {
+            resolve(dev);
           })
           .catch(function (err) {
             reject(err);
           });
       } else {
         return result.update(device)
-          .then(function () {
-            resolve();
+          .then(function (dev) {
+            resolve(dev);
           })
           .catch(function (err) {
             reject(err);
@@ -544,6 +550,36 @@ function upsertDevice(device) {
   });
 }
 
+// add default player for the device
+const addDefaultMediaPlayer = async(deviceId, appId, companyId) => {
+  try {
+    const findDefaultMediaPlaeyer = await models.media_player.findOne({
+      attributes: ['id', 'player_name'],
+      where: {
+        app_id: appId,
+        company_id: companyId,
+        default: true
+      }
+    });
+
+    const result = await models.device_mediaplayer.upsert({
+      device_id: deviceId,
+      mediaplayer_id: findDefaultMediaPlaeyer.id
+    });
+    return Promise.resolve(result);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
+const checkIfMediaPlayerIsSet = async(deviceId) => {
+  try {
+    const result = await models.device_mediaplayer.findOne({ device_id: deviceId});
+    return Promise.resolve(result);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
 
 exports.listMultiCompanies = function (req, res) {
   const username = req.params.username;

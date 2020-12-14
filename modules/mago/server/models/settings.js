@@ -64,7 +64,12 @@ module.exports = function (sequelize, DataTypes) {
         },
         help_page: {
             type: DataTypes.STRING(255),
-            defaultValue: '/help_and_support',
+            defaultValue: '/help_support',
+            allowNull: false
+        },
+        terms_condition_page: {
+            type: DataTypes.STRING(255),
+            defaultValue: '/terms_and_condition',
             allowNull: false
         },
         online_payment_url: {

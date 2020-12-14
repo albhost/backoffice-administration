@@ -32,12 +32,12 @@ module.exports = function(sequelize, DataTypes) {
             defaultValue: false
         },
         device_id: {
-            type: DataTypes.STRING(40),
+            type: DataTypes.STRING(255),
             allowNull: false,
 			unique: true
         },
         device_ip: {
-            type: DataTypes.STRING(15),
+            type: DataTypes.STRING(24),
             allowNull: true
 		},
         device_mac_address: {
@@ -94,6 +94,22 @@ module.exports = function(sequelize, DataTypes) {
             type: DataTypes.STRING(10),
             allowNull: true
         },
+        vmx_id: {
+            type: DataTypes.STRING(255),
+            allowNull: true,
+        },
+        vmx_player_id: {
+            type: DataTypes.STRING(255),
+            allowNull: true,
+        },
+        vmx_subscription_id: {
+            type: DataTypes.STRING(255),
+            allowNull: true,
+        },
+        vmx_subscription_end: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
         createdAt: {
             type: DataTypes.DATE,
             allowNull: true
@@ -108,6 +124,8 @@ module.exports = function(sequelize, DataTypes) {
             Devices.belongsTo(models.login_data, {foreignKey: 'login_data_id'});
             Devices.belongsTo(models.settings, {foreignKey: 'company_id'});
             Devices.belongsTo(models.app_group, {foreignKey: 'appid'});
+            Devices.hasOne(models.device_mediaplayer, {foreignKey: 'device_id'})
+            //Devices.belongsToMany(models.media_player, { as: 'devices', through: 'device_mediaplayer' })
         }
     });
     return Devices;

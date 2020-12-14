@@ -10,7 +10,7 @@ var path = require('path'),
     customerGroups = require(path.resolve('./modules/mago/server/controllers/customer_group.server.controller'));
 
 
-module.exports = function(app) {
+module.exports = function (app) {
 
     /* ===== customer groups ===== */
     app.route('/api/customergroups')
@@ -22,9 +22,9 @@ module.exports = function(app) {
     app.route('/api/customergroups/:customerGroupId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(customerGroups.dataByID)
         .get(customerGroups.read)
         .put(customerGroups.update)
         .delete(customerGroups.delete);
 
-    app.param('customerGroupId', customerGroups.dataByID);
 };

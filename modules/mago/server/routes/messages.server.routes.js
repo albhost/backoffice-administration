@@ -20,6 +20,7 @@ module.exports = function(app) {
 
     app.route('/api/messages/:messageId')
         .all(policy.Authenticate)
+        .all(msg.dataByID)
         .get(msg.read)
         .put(msg.update)
         .delete(msg.delete);
@@ -36,6 +37,7 @@ module.exports = function(app) {
 
     app.route('/api/commands/:messageId')
         .all(policy.Authenticate)
+        .all(msg.dataByID)
         .get(msg.read)
         .put(msg.update)
         .delete(msg.delete);
@@ -44,8 +46,5 @@ module.exports = function(app) {
         .all(policy.Authenticate)
         .all(policy.isAllowed)
         .post(msg.send_message_action);
-
-
-    app.param('messageId', msg.dataByID);
 
 };

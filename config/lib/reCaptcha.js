@@ -1,26 +1,28 @@
 "use strict";
 
-var config = require('../config'),
-  request = require('request');
-var winston = require("winston");
+const config = require('../config');
+const winston = require("winston");
+const axios = require('axios').default;
 
 // Verify the reCaptcha response
-exports.verify = function(response, cb) {
-  request.post({
-    url: "https://www.google.com/recaptcha/api/siteverify",
-    form: {
-      secret: config.app.reCaptchaSecret,
-      response: response
-    },
-    json: true
-  }, function(err, httpResponse, body) {
-    if (err) {
-      winston.error('reCaptcha error', err);
-      cb(err);
-    } else if (body.success !== true) {
-      cb(body);
+exports.verify = async (response, cb) => {
+  try {
+    let responseData = await axios({
+      method: 'POST',
+      url: 'https://www.google.com/recaptcha/api/siteverify',
+      data: {
+        secret: config.app.reCaptchaSecret,
+        response: response
+      },
+      responseType: 'json'
+    })
+    if (responseData.status === 200) {
+      cb(responseData.data);
     }
 
     if (cb) cb(null);
-  });
+  } catch (error) {
+    winston.error('reCaptcha error', error);
+    cb(error);
+  }
 };

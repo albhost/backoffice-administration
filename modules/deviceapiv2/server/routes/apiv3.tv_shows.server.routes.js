@@ -18,6 +18,18 @@ module.exports = function(app) {
         .all(authpolicy.isAllowed)
         .get(tvShowController.tv_show_details);
 
+    app.route('/apiv3/tv_show/reaction/:tv_show_id/:reaction')
+        .all(authpolicy.isAllowed)
+        .put(tvShowController.reaction);
+
+    app.route('/apiv3/tv_show/favorite/:tv_show_id/:favorite')
+        .all(authpolicy.isAllowed)
+        .put(tvShowController.favorite);
+
+    app.route('/apiv3/tv_show/favorite_tv_shows')
+        .all(authpolicy.isAllowed)
+        .get(tvShowController.get_favorite_tv_shows);
+
     app.route('/apiv3/tv_show/episode_list/:tv_show_id/:season_number')
         .all(authpolicy.isAllowed)
         .get(tvShowController.episode_list);

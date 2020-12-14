@@ -2,25 +2,67 @@
 
 var eventSystem = require('./event_system'),
     db = require('./sequelize').models,
-    axios = require('axios');
+    redis = require('./redis'),
+    axios = require('axios'),
+    winston = require('winston');
+
+const EventSyncName = 'sync_webhook_event';
 
 function initWebhooks(app) {
+    //Subscribe to redis channel
+    let subscriber = redis.getSubscriberClient();
+    subscriber.on('message', function(channel, message) {
+        if (channel != EventSyncName) {
+            return;
+        }
+
+        //metadata string format
+        //company_id:event:action
+        let metadata = message.split(':');
+        if (metadata.length != 3) {
+            winston.error('Failed to sync webhook event system due to mailformed message');
+        }
+
+        let companyId = parseInt(metadata[0]);
+        let eventType = metadata[1];
+        let action = metadata[2];
+        let eventTypes = eventType.split(',');
+
+        winston.info('Syncing webhook for company: ' + companyId + ' event: ' + eventType + ' action: ' + action);
+
+        if (action == 'subscribe') {
+            for (let type of eventTypes) {
+                registerWebhookEvent(companyId, type);
+            }
+        }
+        else if (action == 'unsubscribe') {
+            for (let type of eventTypes) {
+                unRegisterWebhookEvent(companyId, type);
+            }
+        }
+        else {
+            winston.error('Failed to sync webhook events')
+        }
+    });
+
+    subscriber.subscribe(EventSyncName);
+
     db.webhooks.findAll({
         where: {enable: true}
     }).then(function(webhooks) {
         webhooks.forEach(webhook => {
             webhook.events.forEach(event => {
-                registerWebhook(webhook.company_id, event);
+                registerWebhookEvent(webhook.company_id, event);
             })
         });
     })
 }
 
-function registerWebhook(companyID, eventType) {
+function registerWebhookEvent(companyID, eventType) {
     eventSystem.subscribe(companyID, eventType, onEvent)
 }
 
-function unRegisterWebhook(companyID, eventType) {
+function unRegisterWebhookEvent(companyID, eventType) {
     eventSystem.unSubscribe(companyID, eventType, onEvent);
 }
 
@@ -52,6 +94,6 @@ function sendWebhook(url, eventType, data) {
 
 module.exports = {
     initWebhooks: initWebhooks,
-    registerWebhook: registerWebhook,
-    unRegisterWebhook: unRegisterWebhook
+    registerWebhook: registerWebhookEvent,
+    unRegisterWebhook: unRegisterWebhookEvent
 }

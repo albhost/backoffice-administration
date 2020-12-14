@@ -20,9 +20,8 @@ module.exports = function(app) {
     app.route('/api/appmanagement/:appManagementId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(appManagement.dataByID)
         .get(appManagement.read)
         .put(appManagement.update)
         .delete(appManagement.delete);
-
-    app.param('appManagementId', appManagement.dataByID);
 };

@@ -24,12 +24,10 @@ module.exports = function(app) {
     app.route('/api/vods/:vodId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vods.dataByID)
         .get(vods.read)
         .put(vods.update)
         .delete(vods.delete);
-
-    app.param('vodId', vods.dataByID);
-
 
 
     /* ===== VodEpisode ===== */
@@ -45,13 +43,10 @@ module.exports = function(app) {
     app.route('/api/VodEpisode/:VodEpisodeId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(tv_episodes.dataByID)
         .get(tv_episodes.read)
         .put(tv_episodes.update)
         .delete(tv_episodes.delete);
-
-    app.param('VodEpisodeId', tv_episodes.dataByID);
-
-
 
     /* ===== VodSeries ===== */
     app.route('/api/Series')
@@ -66,13 +61,10 @@ module.exports = function(app) {
     app.route('/api/Series/:SeriesId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(tv_shows.dataByID)
         .get(tv_shows.read)
         .put(tv_shows.update)
         .delete(tv_shows.delete);
-
-    app.param('SeriesId', tv_shows.dataByID);
-
-
 
     /* ===== VodSeason ===== */
     app.route('/api/Season')
@@ -87,12 +79,10 @@ module.exports = function(app) {
     app.route('/api/Season/:SeasonId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(tv_seasons.dataByID)
         .get(tv_seasons.read)
         .put(tv_seasons.update)
         .delete(tv_seasons.delete);
-
-    app.param('SeasonId', tv_seasons.dataByID);
-
 
     app.route('/api/update_film')
         .all(policy.Authenticate)

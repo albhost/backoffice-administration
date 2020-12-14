@@ -22,10 +22,9 @@ module.exports = function(app) {
     app.route('/api/genres/:genreId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(genres.dataByID)
         .get(genres.read)
         .put(genres.update)
         .delete(genres.delete);
-
-    app.param('genreId', genres.dataByID);
 
 };

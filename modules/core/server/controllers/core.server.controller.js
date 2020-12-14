@@ -8,10 +8,8 @@ const path = require('path'),
     nodemailer = require('nodemailer'),
     querystring = require('querystring'),
     auth = require(path.resolve('./modules/deviceapiv2/server/auth/apiv2.server.auth')),
-    request = require('request'),
-    jwt = require('jsonwebtoken'),
-    jwtSecret = process.env.JWT_SECRET,
-    jwtIssuer = process.env.JWT_ISSUER;
+    jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 function auth_encrypt(plainText, key) {
   var C = CryptoJS;
@@ -32,7 +30,7 @@ function auth_encrypt(plainText, key) {
 var smtpTransport = nodemailer.createTransport(config.mailer.options);
 
 
-exports.recaptch_service = function(req, res){
+exports.recaptch_service = async function(req, res){
 
     if(req.body.recaptcha === undefined || req.body.recaptcha === '' || req.body.recaptcha === null ){
         return res.json({"success": false, "msg": "Please select captcha"});
@@ -40,15 +38,15 @@ exports.recaptch_service = function(req, res){
     var secretKey = "";
     var verifyUrl = "https://google.com/recaptcha/api/siteverify?secret="+secretKey+"&response="+req.body.recaptcha+"";
 
-    request(verifyUrl, function(error, response, body){
-        var thebody = JSON.parse(body);
-        if(thebody.success !== undefined && !thebody.success){
-            res.send({success: false, message: "Captcha verification failed"});
-        }
-        else{
-            res.send({success: true, message: "Captcha verification succeded"});
-        }
-    });
+  try {
+    const response = await axios.get(verifyUrl);
+    if (!response.data.success) {
+      return res.send({ success: false, message: "Captcha verification failed" });
+    }
+    res.send({ success: true, message: "Captcha verification succeded" });
+  } catch (error) {
+    res.send({ success: false, message: "Captcha verification failed" });
+  }
 }
 
 /**
@@ -187,5 +185,22 @@ exports.testjwtoken = function(req, res) {
 
     } catch (err) {
         res.send(err);
+    }
+};
+
+
+exports.decryptAuth = function (req, res) {
+    const COMPANY_ID = 1;
+    if (req.headers.auth) {
+        let authEncoded = decodeURIComponent(req.headers.auth);
+        authEncoded = authEncoded.replace(/[{}]/g, '');
+        auth.decryptAuth(authEncoded, req.app.locals.backendsettings[COMPANY_ID].new_encryption_key)
+            .then(function (authDecoded) {
+                res.send(authDecoded);
+            }).catch(err => {
+            console.log(err);
+        })
+    } else {
+        return null;
     }
 };

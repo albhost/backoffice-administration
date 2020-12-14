@@ -49,10 +49,8 @@ module.exports = function(app) {
     app.route('/api/ResellersLoginData/:ResellersLoginDataId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(loginData.dataByID)
         .get(loginData.read)
         .put(loginData.update)
     //.delete(loginData.delete);
-
-    app.param('ResellersLoginDataId', loginData.dataByID);
-
 };

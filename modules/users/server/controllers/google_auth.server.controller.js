@@ -1,9 +1,6 @@
 'use strict'
 
-var passport = require('passport'),
-    GoogleStrategy = require('passport-google-oauth').OAuth2Strategy,
-    path = require('path'),
-    db = require(path.resolve('./config/lib/sequelize')).models,
+const path = require('path'),
     authentication = require(path.resolve('./modules/mago/server/controllers/authentication.controller')),
     companyFn = require(path.resolve('./custom_functions/company')),
     winston = require('winston');

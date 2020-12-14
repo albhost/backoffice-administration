@@ -60,7 +60,7 @@ module.exports = function(sequelize, DataTypes) {
         },
         encryption: {
             type: DataTypes.BOOLEAN,
-            allowNull: false
+            allowNull: true
         },
         encryption_url: {
             type: DataTypes.STRING(255),
@@ -74,6 +74,18 @@ module.exports = function(sequelize, DataTypes) {
         drm_platform: {
             type: DataTypes.STRING(20),
             allowNull: false
+        },
+        vmx_content_id: {
+            type: DataTypes.STRING(50),
+            defaultvalue: ''
+        },
+        vmx_asset_id: {
+            type: DataTypes.STRING(50),
+            defaultvalue: ''
+        },
+        thumbnail_url: {
+            type: DataTypes.STRING(255),
+            defaultvalue: ''
         }
     }, {
         tableName: 'channel_stream',

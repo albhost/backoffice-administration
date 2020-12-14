@@ -141,10 +141,26 @@ exports.create_customer_with_login = function(req, res) {
 };
 
 
-exports.find_or_create_customer_and_login = function(req, res) {
-
+exports.find_or_create_customer_and_login = function (req, res) {
+    let email;
+    try {
+        if (!req.body.email) {
+           return Promise.reject(new Error('There has been an error getting email'));
+        } else {
+            email = req.body.email.toLowerCase().trim();
+        }
+    } catch (e) {
+        winston.error("There has been an error getting email");
+        res.status(500).send({
+            error: {
+                code: 500,
+                message: 'There has been an error getting email'
+            }
+        });
+        return ;
+    }
     return db.customer_data.findOne({
-        where: {email: req.body.email.toLowerCase()}
+        where: {email: email}
     }).then(function (customer_response) {
 
         //if customer data email found

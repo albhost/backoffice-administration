@@ -22,11 +22,9 @@ module.exports = function(app) {
     app.route('/api/vodstreams/:vodStreamId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vodStreams.dataByID)
         .get(vodStreams.read)
         .put(vodStreams.update)
         .delete(vodStreams.delete);
-
-    app.param('vodStreamId', vodStreams.dataByID);
-
 
 };

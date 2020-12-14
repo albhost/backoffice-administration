@@ -1,16 +1,12 @@
 'use strict';
 
-var passport = require('passport'),
-    JwtStrategy = require('passport-jwt').Strategy,
-    ExtractJwt = require('passport-jwt').ExtractJwt;
-
-var path = require('path'),
+const path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     policy = require('../policies/mago.server.policy'),
     epgData = require(path.resolve('./modules/mago/server/controllers/epg_data.server.controller'));
 
 
-module.exports = function(app) {
+module.exports = function (app) {
 
     /* ===== epg data ===== */
 
@@ -37,11 +33,14 @@ module.exports = function(app) {
     app.route('/api/epgdata/:epgDataId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(epgData.dataByID)
         .get(epgData.read)
         .put(epgData.update)
         .delete(epgData.delete);
 
-    app.param('epgDataId', epgData.dataByID);
-
+    app.route('/api/bulkUpload')
+        .all(policy.Authenticate)
+        .all(policy.isAllowed)
+        .post(epgData.bulkUpload);
 
 };

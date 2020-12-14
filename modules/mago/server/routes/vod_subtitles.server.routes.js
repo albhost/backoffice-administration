@@ -18,11 +18,9 @@ module.exports = function(app) {
     app.route('/api/vodsubtitles/:vodSubtitleId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vodSubtitles.dataByID)
         .get(vodSubtitles.read)
         .put(vodSubtitles.update)
         .delete(vodSubtitles.delete);
-
-    app.param('vodSubtitleId', vodSubtitles.dataByID);
-
 
 };

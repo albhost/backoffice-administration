@@ -192,33 +192,33 @@
         </div>
         <div class="col-xs-6 logo-container">
             <input type="file" id="imgInp" />
-            <img id="company_logo" src="<%= image %>" alt="your image" width="300" />
+            <img id="company_logo" src="{{ image }}" alt="your image" width="300" />
         </div>
     </div><!-- row branding -->
 
     <div class="row infos" ng-controller="InvoiceCtrl">
         <div class="col-xs-6">
             <div class="input-container"><i class="fa fa-address-card fa-md"></i> Name/Lastname:<br/>
-                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;<%= firstname %>&nbsp;<%= lastname %></p>
+                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;{{ firstname }}&nbsp;{{ lastname }}</p>
             </div>
             <div class="input-container"><i class="fa fa-map-marker fa-md"></i> Address:<br/>
-                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;<%= address %></p>
+                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;{{ address }}</p>
             </div>
             <div class="input-container"><i class="fa fa-phone fa-md"></i> Distributor:<br/>
-                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;<%= distributorname %></p>
+                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;{{ distributorname }}</p>
             </div>
             <div class="input-container"><i class="fa fa-user fa-mdmd"></i> User Type:<br/>
-                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;<%= user_type %></p>
+                <p class="move"><i class="fa fa-angle-double-right fa-lg"></i>&nbsp;&nbsp;{{ user_type }}</p>
             </div>
         </div>
         <div class="col-xs-6 right">
-            <div class="input-container"><%= info0 %></div>
-            <div class="input-container"><%= info1 %></div>
-            <div class="input-container"><%= info2 %></div>
-            <div class="input-container"><%= info3 %></div>
-            <div class="input-container"><%= info4 %></div>
-            <div class="input-container"><%= info5 %></div>
-            <div class="input-container"><%= info6 %></div>
+            <div class="input-container">{{ info0 }}</div>
+            <div class="input-container">{{ info1 }}</div>
+            <div class="input-container">{{ info2 }}</div>
+            <div class="input-container">{{ info3 }}</div>
+            <div class="input-container">{{ info4 }}</div>
+            <div class="input-container">{{ info5 }}</div>
+            <div class="input-container">{{ info6 }}</div>
         </div>
     </div><br/><!-- row infos -->
 
@@ -230,13 +230,13 @@
         </div>
         <div class="row invoice-item">
             <div class="col-xs-4 input-container">
-                <%= product %>
+                {{ product }}
             </div>
             <div class="col-xs-4 input-container">
-                <%= saledate %>
+                {{ saledate }}
             </div>
             <div class="col-xs-2 input-container">
-                <%= sale_type %>
+                {{ sale_type }}
             </div>
         </div>
     </div>

@@ -16,9 +16,9 @@ module.exports = function(app) {
     app.route('/api/devicemenus/:deviceMenuId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(deviceMenus.dataByID)
         .get(deviceMenus.read)
         .put(deviceMenus.update)
         .delete(deviceMenus.delete);
 
-    app.param('deviceMenuId', deviceMenus.dataByID);
 };

@@ -18,9 +18,8 @@ module.exports = function(app) {
 
     app.route('/api/appgroup/:appgroupID')
         .all(policy.Authenticate)
+        .all(appgr.dataByID)
         .get(appgr.read)
         .put(appgr.update)
         .delete(appgr.delete);
-
-    app.param('appgroupID', appgr.dataByID);
 };

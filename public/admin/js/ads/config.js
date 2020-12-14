@@ -24,95 +24,91 @@ export default function (nga, admin) {
             nga.field('command').label('Action'),
             nga.field('status', 'choice')
                 .choices([
-                    { value: 'sent', label: 'Outbox commands' },
-                    { value: 'success', label: 'Executed commands' },
-                    { value: 'failure', label: 'Failed commands' }
+                    {value: 'sent', label: 'Outbox commands'},
+                    {value: 'success', label: 'Executed commands'},
+                    {value: 'failure', label: 'Failed commands'}
                 ])
         ])
         .listActions([]);
 
     ads.creationView()
         .title('<h4>Ads <i class="fa fa-angle-right" aria-hidden="true"></i> Send: ad</h4>')
+        .onSubmitSuccess(['progression', 'notification', '$state', 'entry', 'entity', function (progression, notification, $state, entry, entity) {
+            notification.log(`Ads send successfully`, {addnCls: 'humane-flatty-success'});
+            // redirect to the list view
+            $state.go($state.current, {}, {reload: true})
+                .then($state.go($state.get('list'), {entity: entity.name()})); // cancel the default action (redirect to the edition view)
+            return false;
+        }])
         .fields([
             nga.field('username', 'reference')
                 .targetEntity(admin.getEntity('LoginData'))
                 .targetField(nga.field('username'))
-                .attributes({ placeholder: 'Select Account from dropdown list' })
+                .attributes({placeholder: 'Select Account from dropdown list'})
                 .remoteComplete(true, {
                     refreshDelay: 300,
-                    // populate choices from the response of GET /posts?q=XXX
-                    searchQuery: function(search) { return { q: search }; }
+                    searchQuery: function (search) {
+                        return {q: search};
+                    }
                 })
                 .perPage(10) // limit the number of results to 10
                 .label('Username'),
             nga.field('all_users', 'boolean')
-                .validation({ required: true })
+                .validation({required: true})
                 .label('Send to all users (overrides username)'),
             nga.field('appid', 'choices')
-                .attributes({ placeholder: 'Select from dropdown list to send to device type:' })
+                .attributes({placeholder: 'Select from dropdown list to send to device type:'})
                 .choices([
-                    { value: 1, label: 'Android Set Top Box' },
-                    { value: 2, label: 'Android Smart Phone' },
-                    { value: 3, label: 'IOS' },
-                    { value: 4, label: 'Android Smart TV' },
-                    { value: 5, label: 'Samsung Smart TV' },
-                    { value: 6, label: 'Apple TV' },
-                    {value: 7, label: 'Web Smart TV'}
+                    {value: 1, label: 'Android Set Top Box'},
+                    {value: 2, label: 'Android Smart Phone'},
+                    {value: 3, label: 'IOS'},
+                    {value: 4, label: 'Android Smart TV'},
+                    {value: 5, label: 'Samsung Smart TV'},
+                    {value: 6, label: 'Apple TV'},
+                  {value: 7, label: 'Web Smart TV'},
+                  {value: 8, label: 'Web App'},
+                    {value: 9, label: 'Roku TV'}
                 ])
                 .validation({required: true})
                 .label('Applications IDs'),
 
             nga.field('activity', 'choices')
                 .choices([
-                    { value: 'livetv', label: 'In live tv' },
-                    { value: 'vod', label: 'In vod' },
-                    { value: 'all', label: 'Everywhere (overrules other values)' }
+                    {value: 'livetv', label: 'In live tv'},
+                    {value: 'vod', label: 'In vod'},
+                    {value: 'all', label: 'Everywhere (overrules other values)'}
                 ])
                 .validation({required: true})
-                .attributes({ placeholder: 'Select from dropdown list filter values' })
+                .attributes({placeholder: 'Select from dropdown list filter values'})
                 .label('Display'),
-          nga.field('type', 'choice')
-            .choices([
-              { value: 'textonly', label: 'Text Only' },
-              { value: 'imageonly', label: 'Image only' },
-              { value: 'imageandtext', label: 'Image and Text' }
-            ])
-            .validation({required: true})
-            .attributes({ placeholder: 'Select from dropdown list filter values' })
-            .label('Ad Type'),
-
+            nga.field('type', 'choice')
+                .choices([
+                    {value: 'textonly', label: 'Text Only'},
+                    {value: 'imageonly', label: 'Image only'},
+                    {value: 'imageandtext', label: 'Image and Text'}
+                ])
+                .validation({required: true})
+                .attributes({placeholder: 'Select from dropdown list filter values'})
+                .label('Ad Type'),
             nga.field('title', 'string')
-                .attributes({ placeholder: 'Title' })
+                .attributes({placeholder: 'Title'})
                 .label('Title'),
             nga.field('message', 'text')
-                .attributes({ placeholder: 'Message' })
+                .attributes({placeholder: 'Message'})
                 .label('Message'),
-            nga.field('link_url', 'string')
-                .template('<ma-input-field field="field" value="entry.values.link_url"></ma-input-field>'+
-                    '<small id="emailHelp" class="form-text text-muted">Default empty string</small>')
-                .label('Link'),
-
-            nga.field('xOffset', 'choice')
-                .choices([
-                    { value: '1', label: 'Top' },
-                    { value: '2', label: 'Center' },
-                    { value: '3', label: 'Bottom' }
-                ]).attributes({ placeholder: 'Select from dropdown list filter values' })
-                .label('Position'),
-
-            nga.field('imageGif', 'string')
-                .attributes({ placeholder: 'Image link' })
+            nga.field('image_url', 'string')
+                .attributes({placeholder: 'Image link'})
                 .label('Image link'),
             nga.field('duration', 'number')
-                .template('<div>'+
-                    '<ma-input-field field="field" value="entry.values.duration"></ma-input-field>'+
-                    '<small id="emailHelp" class="form-text text-muted">Ad duration. Default 5000 ms</small>'+
+                .template('<div>' +
+                    '<ma-input-field field="field" value="entry.values.duration"></ma-input-field>' +
+                    '<small id="emailHelp" class="form-text text-muted">Ad duration. Default 5000 ms</small>' +
                     '</div>')
-                .attributes({ placeholder: 'Duration in ms' })
+                .attributes({placeholder: 'Duration in ms'})
                 .label('Duration in ms'),
 
             nga.field('delivery_time', 'datetime')
-                .attributes({ placeholder: 'Choose date' })
+                .attributes({placeholder: 'Choose date'})
                 .label('Send ad at'),
 
             nga.field('template')

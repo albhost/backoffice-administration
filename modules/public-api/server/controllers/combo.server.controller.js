@@ -27,7 +27,7 @@ exports.getCombos = function(req, res) {
     query.attributes = ['id','product_id','name', 'duration', 'value', 'isavailable','createdAt'];
     query.where = {company_id: req.token.company_id};
     query.limit = 100;
-    query.order = 'id desc';
+    query.order = [['id', 'DESC']];
     query.raw = true;
 
     if (req.query.offset) {

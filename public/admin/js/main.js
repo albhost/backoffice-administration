@@ -1,13 +1,14 @@
 'use strict'
-var myApp = angular.module('myApp', ['ng-admin','ng-admin.jwt-auth', 'ngVis', 'pascalprecht.translate', 'ngCookies','dndLists', 'vcRecaptcha']);
+var myApp = angular.module('myApp', ['ng-admin','ng-admin.jwt-auth', 'ngVis', 'pascalprecht.translate', 'ngCookies','dndLists', 'vcRecaptcha', 'angularjs-dropdown-multiselect']);
+
 
 myApp.controller('envVariablesCtrl', ['$scope', '$http','notification', function ($scope, $http,notification) {
     var config = {method: 'GET', url: '../api/env_settings'};
     if(localStorage.userToken) config.headers = {'Authorization': localStorage.userToken};  //user token should be included as a header in this request
     $http(config).then(function(response) {
         $scope.version_number = "Version: "+response.data.backoffice_version;
-        $scope.company_name = response.data.company_name;
-        $scope.company_logo = response.data.company_logo;
+        $scope.company_name = response.data.company_name || "Magoware";
+        $scope.company_logo = response.data.company_logo || "./images/logo.png";
     });
 
     $scope.googlelogin = function () {
@@ -648,10 +649,12 @@ myApp.directive('dashboardSummary', require('./dashboard/dashboardSummary'));
 myApp.directive('resellersdashboardSummary', require('./dashboard/dashboard_for_resellers/resellers_dashboardSummary'));
 myApp.directive('graph', require('./dashboard/graphs'));
 myApp.directive('activeDevicesChart', require('./activeDevicesChart/activeDevices'));
+myApp.directive('allActiveDevicesChart', require('./allActiveDevicesChart/allActiveDevices'));
 myApp.directive('sendpush', require('./smsbatch/sendpush'));
 myApp.directive('sale', require('./smsbatch/sale'));
 myApp.directive('vod', require('./smsbatch/vod'));
 myApp.directive('move', require('./smsbatch/move'));
+myApp.directive('remove', require('./smsbatch/removeDevices'));
 myApp.directive('generate', require('./smsbatch/generate'));
 myApp.directive('roles', require('./smsbatch/user_roles_button'));
 myApp.directive('allowMenu', require('./groups/allowMenu'));
@@ -661,6 +664,8 @@ myApp.directive('cancelSubscription', require('./smsbatch/cancelSubscription'));
 myApp.directive('importchannelLogs', require('./import_channels_csv_m3u/see_logs_import_channel'));
 myApp.directive('importvodLogs', require('./import_vod_csv/see_logs_import_vod'));
 myApp.directive('remoteLogin', require('./smsbatch/remoteLogin'));
+myApp.directive('editChannels', require('./smsbatch/editChannels'));
+myApp.directive('bulkUpload', require('./smsbatch/bulkUpload'));
 
 //myApp.directive('roles', require('./grouprights/radioRoles'));
 
@@ -672,6 +677,7 @@ myApp.config(['$stateProvider', require('./support/support')]);
 myApp.config(['$stateProvider', require('./change-pass/change-password')]);
 myApp.config(['$stateProvider', require('./epgData/epgchart')]);
 myApp.config(['$stateProvider', require('./activeDevicesChart/activeDevices')]);
+myApp.config(['$stateProvider', require('./allActiveDevicesChart/allActiveDevices')]);
 myApp.config(['$stateProvider', require('./advanced_settings/advancedSettings')]);
 
 myApp.config(['NgAdminConfigurationProvider', function (nga) {
@@ -718,6 +724,7 @@ myApp.config(['NgAdminConfigurationProvider', function (nga) {
     admin.addEntity(nga.entity('EmailSettings'));
     admin.addEntity(nga.entity('URL'));
     admin.addEntity(nga.entity('Webhooks'));
+    admin.addEntity(nga.entity('carousels'));
     admin.addEntity(nga.entity('ApiKeys'));
     admin.addEntity(nga.entity('ImagesSettings'));
     admin.addEntity(nga.entity('PlayerSettings'));
@@ -731,6 +738,8 @@ myApp.config(['NgAdminConfigurationProvider', function (nga) {
     admin.addEntity(nga.entity('messages'));
     admin.addEntity(nga.entity('commands'));
     admin.addEntity(nga.entity('ads'));
+    admin.addEntity(nga.entity('banners'));
+    admin.addEntity(nga.entity('notification'));
     admin.addEntity(nga.entity('logs'));
     admin.addEntity(nga.entity('activity'));
     admin.addEntity(nga.entity('appgroup'));
@@ -761,6 +770,8 @@ myApp.config(['NgAdminConfigurationProvider', function (nga) {
     admin.addEntity(nga.entity('import_channel'));
     admin.addEntity(nga.entity('import_vod'));
     admin.addEntity(nga.entity('subtitlesImport'));
+    admin.addEntity(nga.entity('program_content'));
+    admin.addEntity(nga.entity('streams_server'));
 
     admin.addEntity(nga.entity('assetsMaster'));
     admin.addEntity(nga.entity('assetsCategory'));
@@ -837,10 +848,13 @@ myApp.config(['NgAdminConfigurationProvider', function (nga) {
     require('./message/config')(nga, admin);
     require('./commands/config')(nga, admin);
     require('./ads/config')(nga, admin);
+    require('./banners/config')(nga, admin);
+    require('./notification/config')(nga, admin);
     require('./logs/config')(nga, admin);
     require('./activit/config')(nga, admin);
     require('./appgroup/config')(nga, admin);
     require('./Webhooks/config')(nga, admin);
+    require('./carousels/config')(nga, admin);
     require('./vod/config')(nga, admin);
     require('./vodCategory/config')(nga, admin);
     require('./vodStream/config')(nga, admin);
@@ -848,6 +862,8 @@ myApp.config(['NgAdminConfigurationProvider', function (nga) {
     require('./vodSubtitles/config')(nga, admin);
     require('./subtitlesImport/config')(nga, admin);
     require('./paymentTransactions/config')(nga, admin);
+    require('./programContent/config')(nga, admin);
+    require('./streamServers/config')(nga, admin);
 
 
     // Menu / Header / Dashboard / Layout

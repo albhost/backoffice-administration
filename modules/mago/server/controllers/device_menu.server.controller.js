@@ -3,16 +3,16 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-    fileHandler = require(path.resolve('./modules/mago/server/controllers/common.controller')),
-    db = require(path.resolve('./config/lib/sequelize')).models,
+    db = require(path.resolve('./config/lib/sequelize')),
     winston = require('winston'),
-    DBModel = db.device_menu,
-    refresh = require(path.resolve('./modules/mago/server/controllers/common.controller.js')),
-    fs = require('fs');
-const escape = require(path.resolve('./custom_functions/escape'));
-
+    models = db.models,
+    DBModel = models.device_menu,
+    fs = require('fs'),
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 /**
  * Create
  */
@@ -59,11 +59,12 @@ exports.update = function(req, res) {
     var updateData = req.deviceMenu;
     if(updateData.icon_url != req.body.icon_url) {
         var deletefile = path.resolve('./public'+updateData.icon_url);
+        updateData.icon_url = req.body.icon_url;
     }
     req.body.appid = req.body.appid.toString();
 
     if(req.body.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result){
+        updateData.update(req.body).then(function(result){
             if(deletefile) {
                 fs.unlink(deletefile, function (err) {
                     //todo: do sth on error?
@@ -93,7 +94,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.deviceMenu;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -128,23 +129,23 @@ exports.delete = function(req, res) {
  */
 exports.list = function(req, res) {
 
-  var qwhere = {},
-      final_where = {},
-      query = req.query;
+    var qwhere = {},
+        final_where = {},
+        query = req.query;
 
-    if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.title = {};
-    qwhere.$or.title.$like = '%'+query.q+'%';
-  }
+    if (query.q) {
+        qwhere = { [Op.or]: { title: { [Op.like]: `%${query.q}%` } } }
+    }
 
   //start building where
   final_where.where = qwhere;
   if(parseInt(query._start)) final_where.offset = parseInt(query._start);
   if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
   final_where.include = [];
   //end build final where
+    final_where.attributes = [ 'id', 'company_id','title','url','appid', 'menu_code', 'position', 'menu_level', 'parent_id','menu_description', 'locale',
+        'is_guest_menu','isavailable', 'createdAt', 'updatedAt',[db.sequelize.fn("concat", req.app.locals.backendsettings[req.token.company_id].assets_url, db.sequelize.col('icon_url')), 'icon_url']],
 
     final_where.where.company_id = req.token.company_id; //return only records for this company
 
@@ -172,19 +173,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
+    const COMPANY_ID = req.token.company_id || 1;
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.deviceMenuId);
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
 
-  DBModel.find({
+  DBModel.findOne({
     where: {
-      id: id
-    },
-    include: []
+      id: value
+    }
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({
@@ -193,12 +196,22 @@ exports.dataByID = function(req, res, next, id) {
     } else {
       req.deviceMenu = result;
       req.deviceMenu.appid = JSON.parse("[" + req.deviceMenu.appid + "]");
+        let protocol = new RegExp('^(https?|ftp)://');
+        if (protocol.test(req.body.icon_url)) {
+            let url = req.body.icon_url;
+            let pathname = new URL(url).pathname;
+            req.body.icon_url = pathname;
+        } else {
+            req.deviceMenu.icon_url = req.app.locals.backendsettings[COMPANY_ID].assets_url + result.icon_url;
+        }
       next();
       return null;
     }
   }).catch(function(err) {
       winston.error("Getting menu data failed with error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting menu data'
+      });
   });
 
 };

@@ -8,9 +8,7 @@ var config = require('../config'),
   https = require('https'),
   cookieParser = require('cookie-parser'),
   passport = require('passport'),
-  socketio = require('socket.io'),
-  session = require('express-session'),
-  RedisStore = require('connect-redis')(session);
+  socketio = require('socket.io');
 
 // Define the Socket.io configuration method
 module.exports = function(app, db) {
@@ -38,13 +36,6 @@ module.exports = function(app, db) {
 
   // Create a new Socket.io server
   var io = socketio(server);
-
-  var redisStore = new RedisStore({
-    host: config.redis.host || 'localhost',
-    port: config.redis.port || 6379,
-    db: config.redis.database || 0,
-    pass: config.redis.password || ''
-  });
 
   // Intercept Socket.io's handshake request
   io.use(function(socket, next) {

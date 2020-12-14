@@ -17,8 +17,7 @@ module.exports = function(app) {
 
     app.route('/api/logs/:logId')
         .all(policy.Authenticate)
+        .all(log.dataByID)
         .get(log.read);
-
-    app.param('logId', log.dataByID);
 
 };

@@ -3,13 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-  db = require(path.resolve('./config/lib/sequelize')).models,
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+    db = require(path.resolve('./config/lib/sequelize')).models,
     winston = require('winston'),
-  DBModel = db.my_channels;
-const escape = require(path.resolve('./custom_functions/escape'));
-
+    DBModel = db.my_channels,
+    escape = require(path.resolve('./custom_functions/escape')),
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 /**
  * Create
@@ -45,7 +46,7 @@ exports.update = function(req, res) {
   var updateData = req.myChannels;
 
   if(req.myChannels.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       res.json(result);
     }).catch(function(err) {
       winston.error("Updating client channel failed with error: ", err);
@@ -65,7 +66,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.myChannels;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function() {
@@ -104,19 +105,20 @@ exports.list = function(req, res) {
       final_where = {},
       query = req.query;
 
-  if(query.q) {
-      qwhere.$or = {};
-      qwhere.$or.title = {};
-      qwhere.$or.title.$like = '%'+query.q+'%';
-      qwhere.$or.description = {};
-      qwhere.$or.description.$like = '%'+query.q+'%';
+  if (query.q) {
+    let filters = []
+    filters.push(
+      { title: { [Op.like]: `%${query.q}%` } },
+      { description: { [Op.like]: `%${query.q}%` } }
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   //start building where
   final_where.where = qwhere;
   if(parseInt(query._start)) final_where.offset = parseInt(query._start);
   if(parseInt(query._end)) final_where.limit = parseInt(query._end)-parseInt(query._start);
-  if(query._orderBy) final_where.order = escape.col(query._orderBy) + ' ' + escape.orderDir(query._orderDir);
+  if(query._orderBy) final_where.order = [[escape.col(query._orderBy), escape.orderDir(query._orderDir)]];
 
   final_where.include = [];
 
@@ -145,19 +147,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.mychannelId);
 
-  DBModel.find({
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+  DBModel.findOne({
     where: {
-      id: id
-    },
-    include: []
+      id: value
+    }
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({
@@ -170,7 +174,9 @@ exports.dataByID = function(req, res, next, id) {
     }
   }).catch(function(err) {
     winston.error("Getting client channel failed with error: ", err);
-    return next(err);
+      return res.status(500).send({
+          message: 'Error at getting  my channels data'
+      });
   });
 
 };

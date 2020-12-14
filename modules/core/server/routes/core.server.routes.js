@@ -20,6 +20,9 @@ module.exports = function(app) {
   app.route('/apiv2/generate_demo_auth')
       .post(core.generateauth);
 
+  app.route('/apiv2/decryptAuth')
+        .post(core.decryptAuth)
+
   app.route('/apiv2/testjwtoken')
       .all(core.testjwtoken);
 

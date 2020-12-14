@@ -3,11 +3,12 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-  db = require(path.resolve('./config/lib/sequelize')).models,
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+    db = require(path.resolve('./config/lib/sequelize')).models,
     winston = require('winston'),
-  DBModel = db.channel_stream_source;
+    DBModel = db.channel_stream_source,
+    Joi = require("joi");
 
 /**
  * Create
@@ -44,7 +45,7 @@ exports.update = function(req, res) {
   var updateData = req.channelStreamSource;
 
   if(req.channelStreamSource.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       res.json(result);
     }).catch(function(err) {
       winston.error("Updating channel stream source failed with error: ", err);
@@ -66,7 +67,7 @@ exports.delete = function(req, res) {
   var deleteData = req.channelStreamSource;
 
   // Find the article
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         // Delete the article
@@ -121,19 +122,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.channelStreamSourceId);
 
-  DBModel.find({
-    where: {
-      id: id
-    },
-    include: []
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+
+    DBModel.findOne({
+        where: {
+            id: value
+        }
   }).then(function(result) {
     if (!result) {
       return res.status(404).send({

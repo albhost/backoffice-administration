@@ -3,13 +3,15 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
+const path = require('path'),
     errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     url = require('url'),
-    DBModel = db.vod_menu_carousel;
+    DBModel = db.vod_menu_carousel,
+    Joi = require("joi");;
+
 
 /**
  * Create
@@ -79,7 +81,7 @@ exports.update = function(req, res) {
     updateData.dataValues = Object.assign(updateData.dataValues,qdata);
 
     if(updateData.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body), req.token.company_id);
             res.json(result);
             return null;
@@ -101,7 +103,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.vodmenucarousel;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -173,31 +175,31 @@ exports.list = function (req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if (!(id % 1 === 0)) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.vodmenucarouselId);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
-        let carousel_params = url.parse(result.dataValues.url, true)
-        var qdata = carousel_params.query;
-        result.dataValues = Object.assign(result.dataValues,qdata);
-
-        result.dataValues.url=carousel_params.pathname;
-
         if (!result) {
             return res.status(404).send({
                 message: 'No data with that identifier has been found'
             });
         } else {
+            let carousel_params = url.parse(result.dataValues.url, true)
+            var qdata = carousel_params.query;
+            result.dataValues = Object.assign(result.dataValues,qdata);
+            result.dataValues.url=carousel_params.pathname;
             req.vodmenucarousel = result;
             result.dataValues.pin_protected = result.dataValues.pin_protected == 'true';
             result.dataValues.adult_content = result.dataValues.adult_content == 'true';
@@ -206,7 +208,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Error fetching dataById at vod menu carousel, error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting vod menu carousel data'
+        });
     });
 
 };

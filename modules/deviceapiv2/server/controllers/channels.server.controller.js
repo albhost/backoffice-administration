@@ -2,17 +2,20 @@
 var path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')),
     Sequelize = require('sequelize'),
-    db_funct = require(path.resolve("./custom_functions/sequelize_functions.js")),
     response = require(path.resolve("./config/responses.js")),
     winston = require(path.resolve('./config/lib/winston')),
-    dateFormat = require('dateformat'),
-    moment = require('moment'),
     async = require('async'),
-    schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js")),
+    schedule = require('../../../../config/lib/scheduler'),
     models = db.models;
-
+    const  { Op } = require('sequelize');
 
 //RETURNS LIST OF CHANNELS AVAILABLE TO THE USER FOR THIS DEVICE
+
+/**
+ * @apiDefine body_auth
+ * @apiSuccess {string} auth The authentication token of user.
+ */
+
 /**
  * @api {POST} /apiv2/channels/list Channels - Livetv and personal channel list
  * @apiName channel_list
@@ -75,7 +78,7 @@ exports.list = function(req, res) {
     var stream_qwhere = {};
     stream_qwhere.stream_source_id = req.thisuser.channel_stream_source_id; // streams come from the user's stream source
     stream_qwhere.stream_mode = 'live'; //filter streams based on device resolution
-    stream_qwhere.stream_resolution = {$like: "%"+req.auth_obj.appid+"%"};
+    stream_qwhere.stream_resolution = {[Op.like]: "%"+req.auth_obj.appid+"%"};
 
     //find user channels and subscription channels for the user
     models.channels.findAll({
@@ -86,7 +89,7 @@ exports.list = function(req, res) {
         include: [
             {model: models.channel_stream,
                 required: true,
-                attributes: ['stream_source_id','stream_url','stream_format', 'drm_platform', 'token','token_url','is_octoshape','encryption','encryption_url'],
+                attributes: ['stream_source_id','stream_url','stream_format', 'drm_platform', 'token','token_url','is_octoshape','encryption','encryption_url', 'thumbnail_url'],
                 where: stream_qwhere
             },
             { model: models.genre, required: true, attributes: [], where: {is_available: true} },
@@ -102,7 +105,7 @@ exports.list = function(req, res) {
                             {model: models.subscription,
                                 required: true,
                                 attributes: [],
-                                where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                                where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
                             }
                         ]}
                 ]},
@@ -168,7 +171,7 @@ exports.list_get = function(req, res) {
     var stream_qwhere = {};
     stream_qwhere.stream_source_id = req.thisuser.channel_stream_source_id; // streams come from the user's stream source
     stream_qwhere.stream_mode = 'live'; //filter streams based on device resolution
-    stream_qwhere.stream_resolution = {$like: "%"+req.auth_obj.appid+"%"};
+    stream_qwhere.stream_resolution = {[Op.like]: "%"+req.auth_obj.appid+"%"};
 
     //find user channels and subscription channels for the user
     models.channels.findAll({
@@ -179,7 +182,7 @@ exports.list_get = function(req, res) {
         include: [
             {model: models.channel_stream,
                 required: true,
-                attributes: ['stream_source_id','stream_url','stream_format','token','token_url','is_octoshape','drm_platform','encryption','encryption_url'],
+                attributes: ['stream_source_id','stream_url','stream_format','token','token_url','is_octoshape','drm_platform','encryption','encryption_url','thumbnail_url'],
                 where: stream_qwhere
             },
             { model: models.genre, required: true, attributes: [], where: {is_available: true} },
@@ -195,7 +198,7 @@ exports.list_get = function(req, res) {
                             {model: models.subscription,
                                 required: true,
                                 attributes: [],
-                                where: {login_id: req.thisuser.id, end_date: {$gte: Date.now()}}
+                                where: {login_id: req.thisuser.id, end_date: {[Op.gte]: Date.now()}}
                             }
                         ]}
                 ]},
@@ -218,6 +221,7 @@ exports.list_get = function(req, res) {
             result[i].token_url = result[i]["channel_streams.token_url"]; delete result[i]["channel_streams.token_url"];
             result[i].encryption = result[i]["channel_streams.encryption"]; delete result[i]["channel_streams.encryption"];
             result[i].encryption_url = result[i]["channel_streams.encryption_url"]; delete result[i]["channel_streams.encryption_url"];
+            result[i].thumbnail_url = result[i]["channel_streams.thumbnail_url"]; delete result[i]["channel_streams.thumbnail_url"];
             result[i].drm_platform = result[i]["channel_streams.drm_platform"]; delete result[i]["channel_streams.drm_platform"];
             result[i].is_octoshape = result[i]["channel_streams.is_octoshape"]; delete result[i]["channel_streams.is_octoshape"];
             result[i].favorite_channel = result[i]["favorite_channels.id"] ? "1":"0"; delete result[i]["favorite_channels.id"];
@@ -420,6 +424,10 @@ exports.favorites = function(req, res) {
 
 //PROVIDES INFORMATION OVER A SINGLE PROGRAM
 /**
+ * @apiDefine body_auth
+ * @apiSuccess {string} auth The authentication token of user.
+ */
+/**
  * @api {POST} /apiv2/channels/program_info Channels - info on a program
  * @apiName program_info
  * @apiGroup DeviceAPI
@@ -465,7 +473,7 @@ exports.program_info = function(req, res) {
                 model: models.channels, required: true, attributes: ['title', 'description'],
                 include: [
                     {model: models.genre, required: true, attributes: [ 'description']},
-                    {model: models.channel_stream, required: false, attributes: [ 'id'], where: {stream_mode: stream_mode, stream_resolution: {$like: "%"+req.auth_obj.appid+"%"}}}
+                    {model: models.channel_stream, required: false, attributes: [ 'id'], where: {stream_mode: stream_mode, stream_resolution: {[Op.like]: "%"+req.auth_obj.appid+"%"}}}
                 ]
             },
             {model: models.program_schedule,
@@ -474,7 +482,7 @@ exports.program_info = function(req, res) {
                 where: {login_id: req.thisuser.id}
             }
         ]
-    }).then(function (epg_program) {
+    }).then(async function (epg_program) {
         if(!epg_program){
             var response_data = [{
                 "genre": '',
@@ -505,7 +513,7 @@ exports.program_info = function(req, res) {
                 "channel_title": (epg_program.channel.title) ? epg_program.channel.title : '',
                 "channel_description": (epg_program.channel.description) ? epg_program.channel.description : '',
                 "status": status,
-                "scheduled": (!epg_program.program_schedules[0]) ? false : schedule.is_scheduled(epg_program.program_schedules[0].id),
+                "scheduled": (!epg_program.program_schedules[0]) ? false : await schedule.isScheduled(epg_program.program_schedules[0].id),
                 "has_catchup": (epg_program.channel.channel_streams[0]) ? true : false
             }];
         }
@@ -547,34 +555,52 @@ exports.schedule = function(req, res) {
         if(epg_program){
             models.program_schedule.findOne({
                 attributes: ['id'], where: {login_id: req.thisuser.id, program_id: req.body.program_id},
-            }).then(function (scheduled) {
+            }).then(async function (scheduled) {
                 if(!scheduled){
-                    models.program_schedule.create({
-                        login_id: req.thisuser.id,
-                        program_id: req.body.program_id,
-                        company_id: req.thisuser.company_id
-                    }).then(function (scheduled){
+                    let t;
+                    try {
+                        t = await db.sequelize.transaction();
+
+                        scheduled = await models.program_schedule.create({
+                            login_id: req.thisuser.id,
+                            program_id: req.body.program_id,
+                            company_id: req.thisuser.company_id
+                        }, {transaction: t});
+
                         var response_data = [{
                             "action": 'created'
                         }];
-                        var firebase_key = req.app.locals.backendsettings[req.thisuser.company_id].firebase_key;
                         //programstart is converted to unix time, decreased by 5 min, decreased by current time. This gives the difference between the current time and 5 min before the start of the program
-                        schedule.schedule_program(moment(epg_program.program_start).format('x') - Date.now() - 300000, firebase_key, scheduled.id, req.thisuser.id, epg_program.channel_number, req.body.program_id);
+                        let delay = epg_program.program_start.getTime() - Date.now() - 60000;
+                        if (delay < 0) {
+                            await t.rollback();
+                            response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
+                            return;
+                        }
+
+                        await schedule.scheduleProgram(scheduled.id, delay, req.thisuser.id, req.body.program_id);
+
+                        await t.commit();
+
                         response.send_res(req, res, response_data, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'no-store');
-                    }).catch(function(error) {
+                    } catch(error) {
+                        if (t) {
+                            await t.rollback();
+                        }
+
                         winston.error("Creating record for scheduled event failed with error: ", error);
                         response.send_res(req, res, [], 706, -1, 'DATABASE_ERROR_DESCRIPTION', 'DATABASE_ERROR_DATA', 'no-store');
-                    });
+                    }
                 }
                 else{
                     var eventid = scheduled.id;
                     models.program_schedule.destroy({
                         where: {login_id: req.thisuser.id, program_id: req.body.program_id}
-                    }).then(function (result){
+                    }).then(async function (result){
                         var response_data = [{
                             "action": 'destroyed'
                         }];
-                        schedule.unschedule_program(eventid);
+                        await schedule.unscheduleProgram(eventid);
                         response.send_res(req, res, response_data, 200, 1, 'OK_DESCRIPTION', 'OK_DATA', 'no-store');
                     }).catch(function(error) {
                         winston.error("Deleting record for scheduled event failed with error: ", error);

@@ -23,7 +23,8 @@ const path = require('path'),
   thisrequestController = require(path.resolve('./modules/deviceapiv2/server/controllers/_this_request.server.controller')),
   geoipLogic = require(path.resolve('./modules/geoip/server/controllers/geoip_logic.server.controller')),
   winston = require(path.resolve('./config/lib/winston')),
-  cache = require(path.resolve('./config/lib/cache'));
+  cache = require(path.resolve('./config/lib/cache')),
+  vmxCtl = require('../controllers/vmx.server.controller');
 
 const rateLimiterForgotPassword = require(path.resolve("./config/lib/rate_limiter_redis")).rateLimiterForgotPassword;
 
@@ -44,6 +45,7 @@ module.exports = function (app) {
 
   /* ===== login data credentials===== */
   app.route('/apiv2/credentials/login')
+    .all(authpolicy.checkBlacklistedApp)
     .all(authpolicy.plainAuth)
     .all(authpolicy.isAllowed)
     .post(credentialsController.loginv2);
@@ -83,7 +85,7 @@ module.exports = function (app) {
     //.post(authpolicy.isAllowed)
     .post(deviceepgController.forwardPostEpgEventsToGet);
 
-  app.get('/apiv2/channels/event', [authpolicy.decodeAuth, deviceepgController.attachTimezoneToUrl, cache.middleware(120000)], deviceepgController.get_event)
+  app.get('/apiv2/channels/event', [authpolicy.decodeAuth, deviceepgController.attachTimezoneToUrl], deviceepgController.get_event)
 
   app.route('/apiv2/channels/osd')
     .get(deviceepgController.get_osd);
@@ -111,6 +113,11 @@ module.exports = function (app) {
   app.route('/apiv2/channels/program_info')
     .all(authpolicy.isAllowed)
     .post(channelsController.program_info);
+
+  app.route('/apiv2/channels/scheduled')
+    .all(authpolicy.isAllowed)
+    .get(deviceepgController.getScheduledPrograms)
+    
   app.route('/apiv2/channels/schedule')
     .all(authpolicy.isAllowed)
     .post(channelsController.schedule);
@@ -141,6 +148,14 @@ module.exports = function (app) {
     .get(settingsController.help_support);
   app.route('/apiv2/help_support')
     .get(settingsController.help_support);
+
+//help and support && terms and condition
+  app.route('/help_support')
+  .get(settingsController.helpAndSupport);
+
+  app.route('/terms_and_condition')
+  .get(settingsController.termsAndCondition);
+
 
   //main device menu
   app.route('/apiv2/main/device_menu')
@@ -176,6 +191,10 @@ module.exports = function (app) {
     .all(authpolicy.isAllowed)
     .post(networkController.command_response);
 
+  app.route('/apiv2/vmx/provision')
+    .all(authpolicy.isAllowed)
+    .post(vmxCtl.handleVmxDeviceProvision)
+
   /*******************************************************************
    User personal data for application
    *******************************************************************/
@@ -200,6 +219,12 @@ module.exports = function (app) {
   app.route('/apiv2/customer_app/change_password')
     .all(authpolicy.isAllowed)
     .post(customersAppController.change_password);
+
+  app.route('/apiv2/change_password')
+    .all(authpolicy.isAllowed)
+    .post(customersAppController.change_passwordV2);
+
+
   app.route('/apiv2/customer_app/reset_pin')
     .all(authpolicy.isAllowed)
     .post(customersAppController.reset_pin);
@@ -237,6 +262,11 @@ module.exports = function (app) {
   app.route('/apiv2/customer_app/change/pin')
     .all(authpolicy.isAllowed)
     .post(customersAppController.change_pin);
+
+  app.route('/apiv2/customer_app/exists')
+    .all(authpolicy.plainAuth)
+    .all(authpolicy.verifyToken)
+    .post(customersAppController.checkCustomerExists);
 
   app.route('/api/customer_app/verify_customer')
     .all(authpolicy.plainAuth)
@@ -293,6 +323,10 @@ module.exports = function (app) {
     .all(authpolicy.isAllowed)
     .get(deviceepgController.get_epg_data);
 
+  app.route('/apiv2/channels/epg/data')
+    .all(authpolicy.isAllowed)
+    .get(deviceepgController.get_epg_data_with_images);
+
   /* ===== weather widget ===== */
 
   app.route('/apiv2/weather_widget')
@@ -321,5 +355,16 @@ module.exports = function (app) {
     .all(authpolicy.plainAuth)
     .get(credentialsController.listMultiCompanies);
 
+  app.route('/apiv3/customer_app/update_receive_message')
+    .all(authpolicy.isAllowed)
+    .post(customersAppController.updateReceiveMessage);
 
+  app.route('/apiv3/customer_app/update_show_adult')
+    .all(authpolicy.isAllowed)
+    .post(customersAppController.updateShowAdult);
+
+  app.route('/apiv3/arbiter/get/url')
+    .all(authpolicy.isAllowed)
+    .get(mainController.arbiter)
+    .post(mainController.arbiter)
 };

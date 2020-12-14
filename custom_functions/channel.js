@@ -1,9 +1,10 @@
 'use strict'
 
 var path = require('path'),
-    schedule = require(path.resolve("./modules/deviceapiv2/server/controllers/schedule.server.controller.js")),
+    schedule = require('../config/lib/scheduler'),
     db = require(path.resolve('./config/lib/sequelize')).models,
     dateFormat = require('dateformat');
+const { Op } = require('sequelize');
 
 exports.getChannelEpg = function (companyId, customerId, channelNumber, intervalStart, intervalEnd, timezone, limit, fill) {
     return new Promise(function (resolve, reject) {
@@ -25,12 +26,12 @@ exports.getChannelEpg = function (companyId, customerId, channelNumber, interval
                 where: {
                     company_id: companyId,
                     program_start: {
-                        $lte: intervalEnd
+                        [Op.lte]: intervalEnd
                     },
                     program_end: {
-                        $and: [
-                            {$lte: intervalEnd},
-                            {$gte: intervalStart}
+                        [Op.and]: [
+                            {[Op.lte]: intervalEnd},
+                            {[Op.gte]: intervalStart}
                         ]
                     }
                 },
@@ -48,7 +49,7 @@ exports.getChannelEpg = function (companyId, customerId, channelNumber, interval
                         where: { login_id: customerId }
                     }
                 ],
-            }).then(function (epgs) {
+            }).then(async function (epgs) {
                 let programs = []
 
                 if (!epgs) {
@@ -59,11 +60,11 @@ exports.getChannelEpg = function (companyId, customerId, channelNumber, interval
                     return;
                 }
 
-                epgs.forEach(epg => {
+                for (let epg of epgs) {
                     //apply timezone
                     let programStart = new Date(epg.program_start).setHours(epg.program_start.getHours() + hoursOffset);
                     let programEnd = new Date(epg.program_end).setHours(epg.program_end.getHours() + hoursOffset);
-                    let scheduled = (!epg.program_schedules[0]) ? false : schedule.is_scheduled(epg.program_schedules[0].id);
+                    let scheduled = (!epg.program_schedules[0]) ? false : await schedule.isScheduled(epg.program_schedules[0].id);
                     let program = {
                         id: epg.id,
                         channelName: epg.channel.title,
@@ -78,7 +79,7 @@ exports.getChannelEpg = function (companyId, customerId, channelNumber, interval
                         progress: Math.round((Date.now() - epg.program_start.getTime() ) * 100 / (epg.program_end.getTime() - epg.program_start.getTime()))
                     }
                     programs.push(program)
-                });
+                }
                 if (fill && programs.length < limit) {
                     generateNoEpg(channelNumber, channel.title, limit, programs)
                 }

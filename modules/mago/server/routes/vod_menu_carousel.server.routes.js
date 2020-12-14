@@ -16,9 +16,9 @@ module.exports = function(app) {
     app.route('/api/vodmenucarousel/:vodmenucarouselId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(vodmenucarousel.dataByID)
         .get(vodmenucarousel.read)
         .put(vodmenucarousel.update)
         .delete(vodmenucarousel.delete);
 
-    app.param('vodmenucarouselId', vodmenucarousel.dataByID);
 };

@@ -71,6 +71,12 @@ export default function ($stateProvider) {
           $scope.active_devices_chart_7 = {
             items: mapData(res, 7)
           };
+          $scope.active_devices_chart_8 = {
+            items: mapData(res, 8)
+          };
+            $scope.active_devices_chart_9 = {
+                items: mapData(res, 9)
+            };
         })
         .catch(err => {
           winston.error("Failed to fetch data from endpoint /reports/active_devices, error: ", err);

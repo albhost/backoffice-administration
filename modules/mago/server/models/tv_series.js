@@ -165,7 +165,8 @@ module.exports = function(sequelize, DataTypes) {
             if(models.tv_series_categories) tv_series.hasMany(models.tv_series_categories, {foreignKey: 'tv_show_id'});
             if(models.tv_season) tv_series.hasMany(models.tv_season, {foreignKey: 'tv_show_id'});
             if(models.tv_season) tv_series.hasMany(models.tv_season, {as:'season', foreignKey: 'tv_show_id'});
-            if(models.t_tv_series_sales) tv_series.hasMany(models.t_tv_series_sales, {foreignKey: 'tv_show_id'})
+            if(models.t_tv_series_sales) tv_series.hasMany(models.t_tv_series_sales, {foreignKey: 'tv_show_id'});
+            if(models.tv_series_resume) tv_series.hasOne(models.tv_series_resume, {foreignKey: 'tv_series_id'});
             tv_series.belongsTo(models.settings, {foreignKey: 'company_id'});
         }
     });

@@ -1,7 +1,6 @@
 'use strict'
 
-const jsonpath = require('jsonpath'),
-    lodash = require('lodash');
+const jsonpath = require('jsonpath');
 
 exports.migrate = function (queryInterface, options) {
     return new Promise(function (resolve, reject) {

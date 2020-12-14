@@ -16,19 +16,16 @@ module.exports = function(app) {
     app.route('/api/htmlContent/:htmlContentId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(htmlContent.dataByID)
         .get(htmlContent.read)
         .put(htmlContent.update)
         .delete(htmlContent.delete);
 
-    app.param('htmlContentId', htmlContent.dataByID);
-
     app.route('/api/htmlContentApp/:contentID')
+        .all(htmlContent.htmlcontent_to_app)
         // .all(policy.Authenticate)
         //.all(policy.isAllowed)
         .get(htmlContent.read);
-
-    app.param('contentID', htmlContent.htmlcontent_to_app);
-
 
     app.route('/api/htmlContentApp')
         // .all(policy.Authenticate)

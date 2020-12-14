@@ -7,7 +7,8 @@ var path = require('path'),
     epgController = require(path.resolve('./modules/public-api/server/controllers/public.epgdata.server.controller.js')),
     comboApiHandler = require(path.resolve('./modules/public-api/server/controllers/combo.server.controller.js')),
     companyApiHandler = require(path.resolve('./modules/public-api/server/controllers/company.server.controller.js')),
-    devicesApiHandler = require(path.resolve('./modules/public-api/server/controllers/devices.server.controller.js'))
+    devicesApiHandler = require(path.resolve('./modules/public-api/server/controllers/devices.server.controller.js')),
+    chargebeeApiHandler = require(path.resolve('./modules/public-api/server/controllers/chargebee.server.controller.js'));
 
 module.exports = function(app) {
 
@@ -81,6 +82,18 @@ module.exports = function(app) {
     app.route('/api/public/company/:id')
         .put(companyApiHandler.updateCompany)
         .post(companyApiHandler.updateCompany);
+
+    app.route('/api/public/subscription')
+        .all(policy.isApiKeyAllowed)
+        .post(chargebeeApiHandler.chargebee_subscription_created)
+
+    app.route('/api/public/subscription/:username/last')
+        .all(policy.isApiKeyAllowed)
+        .get(subscriptionApiHandler.getLastSmallAndBigScreenSubscriptions);
+
+    app.route('/api/public/subscription/status')
+        .all(policy.isApiKeyAllowed)
+        .get(subscriptionApiHandler.getCustomerSubscriptionStatus);
 
 
     /* ---------------------------------------------- EPG Data ---------------------------------------------- */

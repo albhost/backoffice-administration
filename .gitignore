@@ -5,3 +5,9 @@ package-lock.json
 bin/
 public/-1
 public/[0-9]*
+
+
+config/env/db.connection.js
+.env
+public/admin/build/main.js
+public/admin/build/main.js.map

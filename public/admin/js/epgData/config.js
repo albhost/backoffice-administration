@@ -1,28 +1,43 @@
 import edit_button from '../edit_button.html';
+import modalImageUpload from "../../templates/modalImageUpload.html";
+import modalImage from "../../templates/modalTemplate.html";
 
 export default function (nga, admin) {
 	var epgdata = admin.getEntity('EpgData');
 	epgdata.listView()
         .title('<h4>Epg Data <i class="fa fa-angle-right" aria-hidden="true"></i> List</h4>')
-        .actions(['filter','batch', 'export', 'create'])
+        .actions(['batch','filter', 'export', 'create'])
+        .batchActions([
+            '<bulk-upload type="bulkUpload" selection="selection" ></bulk-upload>',
+        ])
+
+
         .fields([
             nga.field('channel_number')
                     .cssClasses('hidden-xs')
                     .label('Nr'),
+            nga.field('icon_url', 'file')
+                .template(`<div ng-controller="modalController">
+                     <img ng-src="{{ entry.values.icon_url }}"
+                     width="45"
+                     height="45"
+                     ng-click="openModalImage(entry.values.icon_url, 'thumbnail')">
+                     </div>`)
+                .label('Image'),
             nga.field('title', 'string')
                     .label('Title'),
-            nga.field('episode_title', 'string')
-                    .label('Episode title'),
+    /*        nga.field('episode_title', 'string')
+                    .label('Episode title'),*/
             nga.field('short_name', 'string')
                     .cssClasses('hidden-xs')
                     .label('Short Name'),
-            nga.field('event_category', 'string')
-                .label('Category'),
-            nga.field('event_rating', 'number')
+          /*  nga.field('event_category', 'string')
+                .label('Category'),*/
+    /*        nga.field('event_rating', 'number')
                 .attributes({ min:1, max:10 })
-                .label('Rating'),
-            nga.field('event_language', 'string')
-                .label('Language'),
+                .label('Rating'),*/
+     /*       nga.field('event_language', 'string')
+                .label('Language'),*/
             nga.field('short_description')
                     .label('Short Description'),
             nga.field('long_description', 'text')
@@ -60,6 +75,10 @@ export default function (nga, admin) {
             nga.field('title')
                 .attributes({ placeholder: 'Full Title' })
                 .label('Title'),
+            nga.field('carousel_type', 'choice')
+                .attributes({ placeholder: 'Carousel Type' })
+                .choices([{ value:'feed_tv_trending',label:'Trending'}, {value:'feed_tv_schedulable',label:'Scheduleable' }])
+                .label('Carousel Type'),
             nga.field('channel_number','number')
                 .attributes({ placeholder: 'Channel Number' })
                 .label('Channel Number'),
@@ -132,12 +151,12 @@ epgdata.creationView()
                     .attributes({ placeholder: 'Title' })
                     .validation({ required: true })
                     .label('Title'),
-            nga.field('episode_title', 'string')
+      /*      nga.field('episode_title', 'string')
                     .map(function truncate(value) {
                         if (!value) {return "-";}
                         else return value;
                     })
-                    .label('Episode title'),
+                    .label('Episode title'),*/
             nga.field('short_name', 'string')
                     .attributes({ placeholder: 'Short Name' })
                     .validation({ required: true })
@@ -150,13 +169,35 @@ epgdata.creationView()
                     .attributes({ placeholder: 'Long Description' })
                     .validation({ required: true })
                     .label('Long Description'),
-            nga.field('event_category', 'string')
+                nga.field('icon_url', 'file')
+                    .uploadInformation({'url': '/file-upload/single-file/programContent/image_url', 'apifilename': 'result'})
+                    .template('<div class="row">' +
+                        '<div class="col-xs-12 col-sm-1"><img src="{{ entry.values.icon_url }}" height="40" width="40" /></div>' +
+                        '<div class="col-xs-12 col-sm-8"><ma-file-field field="field" value="entry.values.icon_url"></ma-file-field></div>' +
+                        '</div>' +
+                        '<div class="row"><small id="emailHelp" class="form-text text-muted">not larger than 250 KB</small></div>')
+                    .validation({
+                        validator: function (value) {
+                            if (value == null) {
+                                throw new Error('Please, choose icon');
+                            } else {
+                                var icon_url = document.getElementById('icon_url');
+                                if (icon_url.value.length > 0) {
+                                    if (icon_url.files[0].size > 250000) {
+                                        throw new Error('Your Icon is too Big, not larger than 250 KB');
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .label('Image *'),
+/*            nga.field('event_category', 'string')
                     .map(function truncate(value) {
                         if (!value) {return "-";}
                         else return value;
                     })
-                    .label('Category'),
-            nga.field('event_rating', 'number')
+                    .label('Category'),*/
+/*            nga.field('event_rating', 'number')
                     .attributes({ min:1, max:10 })
                     .label('Rating (1-10)'),
             nga.field('event_language', 'string')
@@ -164,7 +205,7 @@ epgdata.creationView()
                         if (!value) {return "-";}
                         else return value;
                     })
-                    .label('Language'),
+                    .label('Language'),*/
             nga.field('program_start', 'datetime')
                     .attributes({ placeholder: 'Program Start' })
                     .validation({ required: true })

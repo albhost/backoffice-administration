@@ -5,8 +5,10 @@ var path = require('path'),
 
 module.exports = function(app) {
     app.route('/apiv2/geoip/mytimezone')
+        .all(geoipLogic.checkGeoIPTimezoneCache)
         .get(geoipLogic.handleGetIPTimezone);
     app.route('/apiv2/geoip/')
+        .all(geoipLogic.checkIPDataCache)
         .get(geoipLogic.handleGetIPData);
     app.route('/apiv2/geoip/update')
         .post(geoipLogic.handleDownloadDatabase);

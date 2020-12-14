@@ -26,11 +26,9 @@ module.exports = function(app) {
     app.route('/api/channels/:channelId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(channels.dataByID)
         .get(channels.read)
         .put(channels.update)
         .delete(channels.delete);
-
-    app.param('channelId', channels.dataByID);
-
 
 };

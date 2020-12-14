@@ -3,12 +3,14 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-  errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
+    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
     logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     winston = require('winston'),
-  db = require(path.resolve('./config/lib/sequelize')).models,
-  DBModel = db.package;
+    db = require(path.resolve('./config/lib/sequelize')).models,
+    DBModel = db.package,
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 /**
  * Create
@@ -47,7 +49,7 @@ exports.update = function(req, res) {
   var updateData = req.package;
 
   if(req.package.company_id === req.token.company_id){
-    updateData.updateAttributes(req.body).then(function(result) {
+    updateData.update(req.body).then(function(result) {
       logHandler.add_log(req.token.id, req.ip.replace('::ffff:', ''), 'created', JSON.stringify(req.body), req.token.company_id);
       res.json(result);
       return null;
@@ -69,7 +71,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
   var deleteData = req.package;
 
-  DBModel.findById(deleteData.id).then(function(result) {
+  DBModel.findByPk(deleteData.id).then(function(result) {
     if (result) {
       if (result && (result.company_id === req.token.company_id)) {
         result.destroy().then(function() {
@@ -109,11 +111,12 @@ exports.list = function(req, res) {
 
   if(query.package_type_id) qwhere.package_type_id = query.package_type_id;
   if(query.q) {
-    qwhere.$or = {};
-    qwhere.$or.package_name = {};
-    qwhere.$or.package_name.$like = '%'+query.q+'%';
-    qwhere.$or.package_type_id = {};
-    qwhere.$or.package_type_id.$like = '%'+query.q+'%';
+    let filters = []
+    filters.push(
+      { package_name: { [Op.like]: `%${query.q}%` } },
+      { package_type_id: { [Op.like]: `%${query.q}%` } }
+    );
+    qwhere = { [Op.or]: filters };
   }
 
   //start building where
@@ -150,17 +153,19 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-  if ((id % 1 === 0) === false) { //check if it's integer
-    return res.status(404).send({
-      message: 'Data is invalid'
-    });
-  }
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.packageId);
 
-  DBModel.find({
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
+        DBModel.findOne({
     where: {
-      id: id
+      id: value
     },
     include: [{model: db.package_type, required: true}]
   }).then(function(result) {
@@ -175,7 +180,9 @@ exports.dataByID = function(req, res, next, id) {
     }
   }).catch(function(err) {
     winston.error("Getting package data failed with error: ", err);
-    return next(err);
+            return res.status(500).send({
+                message: 'Error at getting  my package data'
+            });
   });
 
 };

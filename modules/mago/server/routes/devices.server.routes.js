@@ -18,13 +18,20 @@ module.exports = function(app) {
         .all(policy.isAllowed)
         .post(devices.create);
 
+    app.route('/api/devices/delete-old')
+        .all(policy.Authenticate)
+        .all(policy.isAllowed)
+        .delete(devices.deleteOld)
+    
     app.route('/api/devices/:deviceId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(devices.dataByID)
         .get(devices.read)
         .put(devices.update)
         .delete(devices.delete);
 
-    app.param('deviceId', devices.dataByID);
+    app.route('/api/deleteByYear')
+        .get(devices.deleteByYear);
 
 };

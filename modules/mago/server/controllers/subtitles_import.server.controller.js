@@ -11,8 +11,8 @@ var path = require('path'),
     DBModelTvSeries = db.tv_episode_subtitles,
     DBModelVod = db.vod_subtitles,
     OS = require('opensubtitles-api');
-
-var download = require('download-file');
+const fs = require('fs');
+const download = require('download');
 
 const OpenSubtitles = new OS({
     useragent:'TemporaryUserAgent',
@@ -32,7 +32,7 @@ const uuid = function () {
 /**
  * Create
  */
-exports.create = function(req, res) {
+exports.create = async (req, res) => {
     const {vodId, episodeId, url, language} = req.body.data;
 
     if ((vodId && vodId !== '') && (episodeId && episodeId !== '')) {
@@ -47,12 +47,15 @@ exports.create = function(req, res) {
         directory: destination_subtitles,
         filename: uuid() + subtitle_url + '.zip'
     };
-    download(url, options, function (err) {
-        if (err) {
-            winston.error("Error downloading subtitle file, error: " + err);
-            return res.status(400).send({message: `Error download file ${err}`})
-        }
-    });
+
+    try {
+      let data = await download(url);
+      fs.writeFileSync(options.directory + options.filename, data);
+    } catch (error) {
+        winston.error("Error downloading subtitle file, error: ", error);
+        return res.status(400).send({message: `Error download file ${error}`})
+    }
+
     req.body.data.url = '/files/subtitles' + subtitle_url;
     if (vodId && vodId !== '') {
         const body = {

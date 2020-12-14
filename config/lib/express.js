@@ -3,35 +3,30 @@
 /**
  * Module dependencies.
  */
+require('dotenv').config();
 const config = require('../config'),
     express = require('express'),
     bodyParser = require('body-parser'),
-    session = require('express-session'),
-    RedisStore = require('connect-redis')(session),
-    favicon = require('serve-favicon'),
     cookieParser = require('cookie-parser'),
     helmet = require('helmet'),
     consolidate = require('consolidate'),
     path = require('path'),
-    http = require('http'),
-    https = require('https'),
-    multer = require('multer'),
     fs = require('fs'),
     winston = require('./winston'),
     cors = require('cors'),
     rateLimit = require('express-rate-limit'),
     securityConfig = require('../security/exprees.security.config'),
-    policy = require(path.resolve('./modules/mago/server/policies/mago.server.policy')),
     morgan = require('morgan'),
-    uuid = require('uuid'),
-    url = require('url');
+    url = require('url'),
+    scheduler = require('./scheduler');
 
-//documentation
-//docs = require("express-mongoose-docs");
+const responseV4 = require("../../modules/device-api-v4/server/utils/response")
 
 //language configuration parameters
 global.languages = {};
+global.languagesV4 = {};
 const language_folder_path = './config/languages/';
+const language_folder_pathV4 = './config/languagesV4/';
 global.vod_list = {};
 global.company_configurations = {};
 global.livetv_s_subscription_end = [];
@@ -87,6 +82,8 @@ module.exports.initMiddleware = function (app) {
 
     // Enable jsonp
     app.enable('jsonp callback');
+
+    app.enable('trust proxy');
 
     // Environment dependent middleware
     if (process.env.NODE_ENV === 'development') {
@@ -235,7 +232,7 @@ function preventSqlInjection(req, res, next) {
  */
 module.exports.initViewEngine = function (app) {
     winston.info('Initializing ViewEngine...');
-    // Set swig as the template engine
+    // Set handlebars as the template engine
     app.engine('server.view.html', consolidate[config.templateEngine]);
 
     // Set views path and view engine
@@ -259,12 +256,12 @@ module.exports.initSession = function (app, db) {
             secure: config.sessionCookie.secure && config.secure && config.secure.ssl
         },
         key: config.sessionKey,
-        store: new RedisStore({
+        /* store: new RedisStore({
             host: config.redis.host || 'localhost',
             port: config.redis.port || 6379,
             db: config.redis.database || 0,
             pass: config.redis.password || ''
-        })
+        }) */
     }));
 
 };
@@ -335,17 +332,27 @@ module.exports.initModulesServerRoutes = function (app) {
  */
 module.exports.initErrorRoutes = function (app) {
     winston.info('Initializing Error Routes...');
+    app.use('/apiv4/*',function (err, req, res, next) {
+        responseV4.sendError(req, res, 500, 51)
+    });
+
     app.use(function (err, req, res, next) {
-        // If the error object doesn't exists
-        if (!err) {
-            return next();
-        }
+        res.status(500).send({
+            status_code: 500,
+            error_code: 1,
+            timestamp: new Date().toISOString(),
+            error_description: "Global Error",
+            extra_data: "Something went wrong",
+            response_object: []
+        });
+    });
 
-        // Log it
-        winston.error(err.stack);
+    process.on('uncaughtException', function (err) {
+        winston.error("Global error: ", err);
+    });
 
-        // Redirect to error page
-        res.redirect('/server-error');
+    process.on('unhandledRejection', function (err) {
+        winston.error("Global Rejection error: ", err);
     });
 };
 
@@ -371,11 +378,20 @@ module.exports.configureLanguages = function (app) {
     try {
         fs.readdir(language_folder_path, function (err, files) {
             files.forEach(function (file) {
-                var lang = require(path.resolve(language_folder_path + file));
+                const lang = require(path.resolve(language_folder_path + file));
                 if (lang.language_code && lang.language_name && lang.language_variables)
                     global.languages['' + lang.language_code + ''] = lang;
             });
         });
+
+        fs.readdir(language_folder_pathV4, function (err, files) {
+            files.forEach(function (file) {
+                const lang = require(path.resolve(language_folder_pathV4 + file));
+                if (lang.language_code && lang.language_name && lang.language_variables)
+                    global.languagesV4[lang.language_code.toString()] = lang;
+            });
+        });
+
     } catch (error) {
         winston.error("Error loading languages!, error: ", error);
     }
@@ -399,6 +415,9 @@ module.exports.readCompanyConfigurations = function (app) {
  * Initialize the Express application
  */
 module.exports.init = function (db, redis) {
+    // Initialize distributed scheduler
+    scheduler.init();
+    
     // Initialize express app
     var app = express();
 

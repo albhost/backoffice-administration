@@ -165,6 +165,18 @@
         "description": "clients 3 api"
       },
       {
+        "api_url": "/api/program_content",
+        "description": "Program Content"
+      },
+      {
+        "api_url": "/api/banners",
+        "description": "Banners"
+      },
+      {
+        "api_url": "/api/carousels",
+        "description": "Home Page"
+      },
+      {
         "api_url": "/api/epgimport",
         "description": "clients 3 api"
       },

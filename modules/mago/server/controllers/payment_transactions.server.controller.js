@@ -3,12 +3,12 @@
 /**
  * Module dependencies.
  */
-var path = require('path'),
-    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
+const path = require('path'),
     winston = require('winston'),
     db = require(path.resolve('./config/lib/sequelize')).models,
-    DBModel = db.payment_transactions;
-
+    DBModel = db.payment_transactions,
+    Joi = require("joi");
+const { Op } = require('sequelize');
 
 /**
  * Show current
@@ -28,9 +28,7 @@ exports.list = function(req, res) {
         query = req.query;
 
     if(query.q) {
-        qwhere.$or = {};
-        qwhere.$or.title = {};
-        qwhere.$or.title.$like = '%'+query.q+'%';
+        qwhere = { [Op.or]: { title: { [Op.like]: `%${query.q}%` } } }
     }
 
     //start building where
@@ -62,19 +60,21 @@ exports.list = function(req, res) {
 /**
  * middleware
  */
-exports.dataByID = function(req, res, next, id) {
+exports.dataByID = function(req, res, next) {
 
-    if ((id % 1 === 0) === false) { //check if it's integer
-        return res.status(404).send({
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.PaymentTransactionID);
+
+    if (error) {
+        return res.status(400).send({
             message: 'Data is invalid'
         });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
-            id: id
-        },
-        include: []
+            id: value
+        }
     }).then(function(result) {
         if (!result) {
             return res.status(404).send({
@@ -88,7 +88,9 @@ exports.dataByID = function(req, res, next, id) {
         }
     }).catch(function(err) {
         winston.error("Getting transaction data failed with error: ", err);
-        return next(err);
+        return res.status(500).send({
+            message: 'Error at getting  my payment transactions data'
+        });
     });
 
 };

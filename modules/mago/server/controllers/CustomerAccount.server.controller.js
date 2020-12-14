@@ -5,20 +5,17 @@
  * Module dependencies.
  */
 const path = require('path'),
-    errorHandler = require(path.resolve('./modules/core/server/controllers/errors.server.controller')),
-    logHandler = require(path.resolve('./modules/mago/server/controllers/logs.server.controller')),
     saas_functions = require(path.resolve('./custom_functions/saas_functions')),
-    subscription_functions = require(path.resolve('./custom_functions/sales.js')),
     customerFunctions = require(path.resolve('./custom_functions/customer_functions.js')),
-    responses = require(path.resolve("./config/responses.js")),
     eventSystem = require(path.resolve("./config/lib/event_system.js")),
     db = require(path.resolve('./config/lib/sequelize')).models,
     Sequelize = require('sequelize'),
     DBModel = db.login_data,
-    winston = require('winston');
+    winston = require('winston'),
+    Joi = require("joi");
 
 const db_t = require(path.resolve('./config/lib/sequelize'));
-
+const  { Op } = require('sequelize');
 
 /**
  * @api {post} /api/customerdata Create Customer
@@ -111,10 +108,13 @@ exports.list = function(req, res) {
 
     //search client account by username
     if (query.username) qwhere.username = query.username; //full text search
-    else if (query.q) {
-        qwhere.$or = {};
-        qwhere.$or.username = {};
-        qwhere.$or.username.$like = '%' + query.q + '%'; //partial search        
+    if (query.q) {
+        qwhere = {
+            ...qwhere, 
+            ...{
+                [Op.or]: { username: { [Op.like]: `%${query.q}%` } }
+            }
+        }
     }
 
     var customer_data_where = {};
@@ -123,31 +123,22 @@ exports.list = function(req, res) {
 
 
     if (emailFilter) {
-        customer_data_where = {$or: {email: {$like: '%' + emailFilter + '%'}}};
+        customer_data_where = {[Op.or]: {email: {[Op.like]: '%' + emailFilter + '%'}}};
     }
 
 
 
     if (nameFilter) {
         customer_data_where = {
-            $or: {
+            [Op.or]: {
                 //db.sequelize.fn("concat",
 
                 where: Sequelize.where(Sequelize.fn("CONCAT", Sequelize.col("firstname")," ", Sequelize.col("lastname")), {
-                    like: '%' + nameFilter + '%'
+                    [Op.like]: '%' + nameFilter + '%'
                 })
             }
         }
     }
-
-    //
-    // if (nameFilter) {
-    //     customer_data_where = {
-    //         $or: {
-    //             firstname : {$like: '%' + nameFilter + '%'}
-    //         }
-    //     };
-    // }
 
     //start building where
     final_where.where = qwhere;
@@ -185,11 +176,19 @@ exports.list = function(req, res) {
  * middleware
  */
 exports.dataByID = function(req, res) {
-    const id = req.params.customerId;
+
+    const getID = Joi.number().integer().required();
+    const {error, value} = getID.validate(req.params.customerId);
+
+    if (error) {
+        return res.status(400).send({
+            message: 'Data is invalid'
+        });
+    }
 
     DBModel.findOne({
         where: {
-            id: id,
+            id: value,
             company_id: req.token.company_id
         },
         include: [{model: db.customer_data}]
@@ -213,10 +212,10 @@ exports.dataByID = function(req, res) {
 exports.updateClient = async function(req, res){
 
     try {
-        const customer = await db.customer_data.find({
+        const customer = await db.customer_data.findOne({
             where: {
                 email: req.body.customer_datum.email,
-                id: {$not: req.body.customer_datum.id}
+                id: {[Op.not]: req.body.customer_datum.id}
             }
         });
         if(customer) {

@@ -1,12 +1,13 @@
 'use strict'
 
-var csv = require('csvtojson'),
+const csv = require('csvtojson'),
     fs = require('fs-extra'),
     path = require('path'),
     async = require('async'),
     sequelize = require(path.resolve('./config/lib/sequelize')),
-    db = sequelize.models,
-    parsers = require('playlist-parser');
+    db = sequelize.models;
+
+const playlistParser = require('iptv-playlist-parser') 
 
 exports.handleImportChannel = function(req, res) {
     const filename = req.body.filename;
@@ -145,32 +146,26 @@ function importChannelFromCSV(req, res) {
 }
 
 function importChannelFromM3U(req, res) {
-    let m3u = parsers.M3U;
-    let streams = m3u.parse(fs.readFileSync('./public' + req.body.filename, {encoding: 'utf8'}));
+    const m3uFile = fs.readFileSync('./public' + req.body.filename, { encoding: 'utf-8'})
+    const parsedPlaylist = playlistParser.parse(m3uFile)
     let logs = [];
 
     db.channels.findAll({
         attributes: [[sequelize.sequelize.fn('MAX', sequelize.sequelize.col('channel_number')), 'max']]
     }).then(function(result){
         let chanNum = result[0].dataValues.max;
-        async.forEach(streams, function(stream, done) {
-
+        async.forEach(parsedPlaylist.items, function(stream, done) {
             if (!stream) {
                 done();
                 return;
             }
 
             chanNum++;
-            //decode title params
-            let titleParams = stream.title.split(',');
-            let options = titleParams[0].split(' ');
-            let tvgLogo = getParam(options, 'tvg-logo');
-
             let channel = {
                 company_id: req.token.company_id,
                 channel_number: chanNum,
-                title: titleParams[titleParams.length - 1], //get lst param as title
-                icon_url: (tvgLogo) ? tvgLogo : '',
+                title: stream.name.replace('\r', ''),
+                icon_url: stream.tvg.logo,
                 genre_id: 1,
                 epg_map_id: chanNum,
                 description : '',
@@ -183,7 +178,7 @@ function importChannelFromM3U(req, res) {
                 .then(function(channel){
                     let channelStream = {
                         commpany_id: req.token.company_id,
-                        stream_url: stream.file,
+                        stream_url: stream.url,
                         stream_format: 2,
                         channel_id: channel.id,
                         stream_source_id: 1,
@@ -223,15 +218,4 @@ function importChannelFromM3U(req, res) {
             res.send(responseObj);
         })
     })
-
-    function getParam(params, param) {
-        for(let i = 0;  i < params.length; i++) {
-            let kv = params[i].split('=');
-            if(kv[0] == param) {
-                return kv[1].replace(/"/g, '');
-            }
-        }
-
-        return null;
-    }
 }

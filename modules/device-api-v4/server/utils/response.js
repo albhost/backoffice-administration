@@ -6,7 +6,7 @@ function sendError(req, res, statusCode, errorCode) {
     let response = {
         error: {
             code: errorCode,
-            message: (languages[language]) ? languages[language].language_variables[errorCode] : languages['eng'].language_variables[errorCode]
+            message: (languagesV4[language]) ? languagesV4[language].language_variables[errorCode.toString()] : languagesV4['eng'].language_variables[errorCode.toString()]
         }
     }
 
@@ -14,9 +14,13 @@ function sendError(req, res, statusCode, errorCode) {
     res.send(response);
 }
 
-function sendData (req, res, data) {
+function sendData (req, res, data, cacheHeader) {
     let response = {
         data: data
+    }
+
+    if (cacheHeader) {
+        res.setHeader('cache-control', cacheHeader);
     }
 
     res.send(response);

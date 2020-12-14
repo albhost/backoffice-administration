@@ -9,7 +9,7 @@ module.exports = {
     reCaptchaSecret: process.env.RECAPTCHA_SECRET || '1234'
   },
   port: process.env.PORT || 80,
-  templateEngine: 'swig',
+  templateEngine: 'handlebars',
   // Session Cookie settings
   sessionCookie: {
     // session expiration is set by default to 24 hours

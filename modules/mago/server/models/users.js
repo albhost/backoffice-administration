@@ -1,7 +1,7 @@
 "use strict";
 
-var crypto = require('crypto');
-var winston = require('winston');
+const crypto = require('crypto');
+const winston = require('../../../../config/lib/winston');
 
 module.exports = function(sequelize, DataTypes) {
     var Users = sequelize.define('users', {
@@ -24,7 +24,7 @@ module.exports = function(sequelize, DataTypes) {
             validate: {
                 isUnique: function(value, next) {
                     var self = this;
-                    Users.find({
+                    Users.findOne({
                             where: {
                                 username: value
                             }
@@ -58,7 +58,7 @@ module.exports = function(sequelize, DataTypes) {
                 },
                 isUnique: function(value, next) {
                     var self = this;
-                    Users.find({
+                    Users.findOne({
                             where: {
                                 email: value
                             }
@@ -132,21 +132,7 @@ module.exports = function(sequelize, DataTypes) {
             type: DataTypes.BOOLEAN,
             defaultValue: false
         },
-    },
-    {
-        instanceMethods: {
-            makeSalt: function() {
-                return crypto.randomBytes(16).toString('base64');
-            },
-            authenticate: function(plainText) {
-                return this.encryptPassword(plainText, this.salt) === this.hashedpassword;
-            },
-            encryptPassword: function(hashedpassword, salt) {
-                if (!hashedpassword || !salt || hashedpassword.length < 1 || salt.length < 1) return false;
-                salt = Buffer.from(salt, 'base64');
-                return crypto.pbkdf2Sync(hashedpassword, salt, 10000, 64,'sha1').toString('base64');
-            }
-        },
+    }, {
         tableName: 'users',
         associate: function(models) {
             if(models.salesreport){
@@ -158,10 +144,25 @@ module.exports = function(sequelize, DataTypes) {
         }
     });
 
+    Users.prototype.makeSalt = function () {
+        return crypto.randomBytes(16).toString('base64');
+    }
+
+    Users.prototype.authenticate = function (plainText) {
+        return this.encryptPassword(plainText, this.salt) === this.hashedpassword;
+    }
+
+    Users.prototype.encryptPassword = function (hashedpassword, salt) {
+        if (!hashedpassword || !salt || hashedpassword.length < 1 || salt.length < 1) return false;
+        salt = Buffer.from(salt, 'base64');
+        return crypto.pbkdf2Sync(hashedpassword, salt, 10000, 64,'sha1').toString('base64');
+    }
+
     Users.beforeCreate(function(users, options) {
         users.set('salt', users.salt);
         users.set('hashedpassword', users.encryptPassword(users.hashedpassword, users.salt));
     });
+
     Users.beforeUpdate(function(users, options) {
         if (users.changed('hashedpassword')) {
             var salt = users.makeSalt();

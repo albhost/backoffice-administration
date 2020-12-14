@@ -11,7 +11,14 @@ export default function (nga, admin) {
                 .label('Help and Support website')
                 .template('<div class="form-group">'+
                     '<ma-input-field field="field" value="entry.values.help_page"></ma-input-field>'+
-                    '<small id="emailHelp" class="form-text text-muted">Configure application help page (By default /help_and_support)</small>'+
+                    '<small id="emailHelp" class="form-text text-muted">Configure application help page (By default /help_support)</small>'+
+                    '</div>'),
+            nga.field('terms_condition_page', 'string')
+                .validation({ required: true })
+                .label('Terms and Conditions website')
+                .template('<div class="form-group">'+
+                    '<ma-input-field field="field" value="entry.values.terms_condition_page"></ma-input-field>'+
+                    '<small id="emailHelp" class="form-text text-muted">Configure application terms and conditions page (By default /terms_and_condition)</small>'+
                     '</div>'),
             nga.field('online_payment_url', 'string')
                 .validation({ required: true })

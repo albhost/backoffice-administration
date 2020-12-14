@@ -13,6 +13,6 @@ module.exports = function(app) {
 
     //woocommerce webhook order status complete
     app.route('/apiv2/woocommerce/order_status_change')
-        .all(policy.isApiKeyAllowed)
+        //.all(policy.isApiKeyAllowed)
         .post(wooFunctions.woocommerce_order_status_change);
 }

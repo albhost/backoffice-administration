@@ -1,13 +1,12 @@
 //'use strict'
 var path = require('path'),
     db = require(path.resolve('./config/lib/sequelize')),
-    model = db.model,
-    response = require(path.resolve("./config/responses.js")),
     models = db.models,
     dateFormat = require('dateformat'),
     push_msg = require(path.resolve('./custom_functions/push_messages')),
     scheduled_tasks = [];
 var winston = winston = require(path.resolve('./config/lib/winston'));
+const { Op } = require('sequelize')
 
 function schedule_program(event_time, firebase_key, event_id, login_data_id, channel_number, program_id){
     try{
@@ -91,7 +90,7 @@ exports.reload_scheduled_programs = function() {
     models.epg_data.findAll({
         attributes: ['channel_number', 'program_start'],
         include: [{ model: models.program_schedule, required: true, attributes: ['id', 'login_id', 'program_id']}],
-        where: {program_start: {gte: current_time}}
+        where: {program_start: {[Op.gte]: current_time}}
     }).then(function(result){
         //foreach record call schedule program
         for(var i = 0; i<result.length; i++){
@@ -152,7 +151,7 @@ function end_subscription(login_id, ending_after, app_ids, screensize, activity,
 
 function send_action(action, login_id, app_ids, firebase_key){
     models.devices.findOne({
-        attributes: ['googleappid', 'username', 'app_version', 'appid'], where: {login_data_id: login_id, device_active: true, appid: {in: app_ids}}
+        attributes: ['googleappid', 'username', 'app_version', 'appid'], where: {login_data_id: login_id, device_active: true, appid: {[Op.in]: app_ids}}
     }).then(function(result){
         if(result) {
             var min_ios_version = (company_configurations.ios_min_version) ? parseInt(company_configurations.ios_min_version) : parseInt('1.3957040');

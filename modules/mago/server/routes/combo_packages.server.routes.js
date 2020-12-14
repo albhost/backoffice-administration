@@ -22,10 +22,9 @@ module.exports = function(app) {
     app.route('/api/combopackages/:comboPackageId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(comboPackages.dataByID)
         .get(comboPackages.read)
         .put(comboPackages.update)
         .delete(comboPackages.delete);
-
-    app.param('comboPackageId', comboPackages.dataByID);
 
 };

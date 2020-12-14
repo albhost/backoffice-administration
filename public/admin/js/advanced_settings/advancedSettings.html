@@ -48,6 +48,25 @@
                 margin-right: auto;
             }
         }
+
+
+        img {
+            border-radius: 25px;
+            border: 2px solid #DCDCDC;
+            padding: 8px;
+            width: 70px;
+            height: 70px;
+        }
+
+        h3 {
+            border-radius: 25px;
+            border: 2px solid #DCDCDC;
+            padding: 8px;
+            width: 1150px;
+            height: 90px;
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -63,7 +82,9 @@
         <div class="col-md-12">
             <form ng-submit="updateAdvancedSettings()">
                 <div class="form-group">
-                    <h3>Akamai</h3>
+                    <h3>
+                        <img src="/admin/images/akamai.png" width="50" height="50" ng-click="myFunction()">
+                        Akamai </h3>
                     <small id="emailHelp" class="form-text text-muted">{{advanced_settings.akamai.description}}</small>
                     <br>
                     <br>
@@ -89,7 +110,37 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Flussonic</h3>
+                    <h3>
+                        <img src="/admin/images/akamai.png" width="50" height="50" ng-click="myFunction()">
+                        Akamai Segement Media </h3>
+                    <small id="emailHelp" class="form-text text-muted">{{advanced_settings.akamai_segment_media.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <label for="akamaiInput">Akamai Key</label>
+                        <input type="text" class="form-control" id="akamaiSegmentKey"
+                               ng-model="advanced_settings.akamai_segment_media.key"
+                               placeholder="Akamai Key">
+                        <br>
+                        <div class="form-group">
+                            <label for="authInput11">Akamai Window</label>
+                            <input type="text" class="form-control" id="akamaiSegmentWindow"
+                                   ng-model="advanced_settings.akamai_segment_media.window"
+                                   placeholder="Akamai Window">
+                        </div>
+                        <div class="form-group">
+                            <label for="akamaiSalt">Akamai Salt</label>
+                            <input type="text" class="form-control" id="akamaiSegmentMediaSalt"
+                                   ng-model="advanced_settings.akamai_segment_media.salt"
+                                   placeholder="Akamai Salt">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <h3>
+                        <img src="/admin/images/flussonic.png" width="50" height="50">
+                        Flussonic</h3>
                     <small class="form-text text-muted">{{advanced_settings.flussonic.description}}</small>
                     <br>
                     <br>
@@ -119,7 +170,9 @@
 
 
                 <div class="form-group">
-                    <h3>WooCommerce</h3>
+                    <h3>
+                        <img src="/admin/images/woo-woocommerce.png" width="50" height="50">
+                        WooCommerce</h3>
                     <small class="form-text text-muted">{{advanced_settings.woocomerce.description}}</small>
                     <br>
                     <br>
@@ -144,7 +197,9 @@
 
 
                 <div class="form-group">
-                    <h3>Stripe</h3>
+                    <h3>
+                        <img src="/admin/images/stripe.png" width="50" height="50">
+                        Stripe</h3>
                     <small class="form-text text-muted">{{advanced_settings.stripe.description}}</small>
                     <br>
                     <br>
@@ -169,7 +224,9 @@
 
 
                 <div class="form-group">
-                    <h3>Paypal</h3>
+                    <h3>
+                        <img src="/admin/images/paypal.jpg" width="50" height="50">
+                        Paypal</h3>
                     <small class="form-text text-muted">{{advanced_settings.paypal.description}}</small>
                     <br>
                     <br>
@@ -194,7 +251,9 @@
 
 
                 <div class="form-group">
-                    <h3>Verizon</h3>
+                    <h3>
+                        <img src="/admin/images/verizon.png" width="50" height="50">
+                        Verizon</h3>
                     <small class="form-text text-muted">{{advanced_settings.verizon.description}}</small>
                     <br>
                     <br>
@@ -218,7 +277,9 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Wowza</h3>
+                    <h3>
+                        <img src="/admin/images/wowza.png" width="50" height="50">
+                        Wowza</h3>
                     <small class="form-text text-muted">{{advanced_settings.wowza.description}}</small>
                     <br>
                     <br>
@@ -235,9 +296,38 @@
                         <br>
                     </div>
                 </div>
+                <div class="form-group">
+                    <h3>
+                        <img src="/admin/images/elasticStack.png" width="50" height="50">
+                        Elastic Stack</h3>
+                    <small class="form-text text-muted">{{advanced_settings.elastic_stack.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <label for="elkStackURL">Elastic Stack URL</label>
+                        <input type="text" class="form-control" id="elkStackURL"
+                               ng-model="advanced_settings.elastic_stack.url"
+                               placeholder="Elastic Stack URL">
+                        <br>
+                        <div class="form-group">
+                            <label for="elkStackUsername">Elastic Stack Username</label>
+                            <input type="text" class="form-control" id="elkStackUsername"
+                                   ng-model="advanced_settings.elastic_stack.username"
+                                   placeholder="Elastic Stack Username">
+                        </div>
+                        <div class="form-group">
+                            <label for="elkStackPassword">Elastic Stack Password</label>
+                            <input type="text" class="form-control" id="elkStackPassword"
+                                   ng-model="advanced_settings.elastic_stack.password"
+                                   placeholder="Elastic Stack Password">
+                        </div>
+                    </div>
+                </div>
 
                 <div class="form-group">
-                    <h3>Nimble DRM</h3>
+                    <h3>
+                        <img src="/admin/images/nimble.png" width="50" height="50">
+                        Nimble DRM</h3>
                     <small class="form-text text-muted">{{advanced_settings.nimble_drm.description}}</small>
                     <br>
                     <br>
@@ -251,7 +341,9 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Nimble Token</h3>
+                    <h3>
+                        <img src="/admin/images/nimble.png" width="50" height="50">
+                        Nimble Token</h3>
                     <small class="form-text text-muted">{{advanced_settings.nimble_token.description}}</small>
                     <br>
                     <br>
@@ -271,7 +363,7 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Auth</h3>
+                    <h3><img src="/admin/images/auth.png" width="50" height="50"> Auth</h3>
                     <small class="form-text text-muted">{{advanced_settings.auth.description}}</small>
                     <br>
                     <br>
@@ -285,7 +377,7 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Vod</h3>
+                    <h3><img src="/admin/images/vod.png" width="50" height="50"> Vod</h3>
                     <small class="form-text text-muted">{{advanced_settings.vod.description}}</small>
                     <br>
                     <br>
@@ -299,27 +391,146 @@
                 </div>
 
                 <div class="form-group">
-                    <h3>Default Media Player</h3>
+                    <h3><img src="/admin/images/mediaPlayer.png" width="50" height="50"> Default Media Player</h3>
                     <small class="form-text text-muted">{{advanced_settings.default_player.description}}</small>
                     <br>
                     <br>
                     <div class="container">
-<!--                        <label for="vodConf">Vod Transaction Duration</label>-->
-<!--                        <input type="text" class="form-control" id="defaultPlayer"-->
-<!--                               ng-model="advanced_settings.default_player.value"-->
-<!--                               placeholder="Default Player">-->
-
-                       <div>
-                           <label for="defaultPlayer">Choose a car:</label>
-                           <select name="defaultPlayer" id="defaultPlayer" ng-model="advanced_settings.default_player.value">
-                               <option value="default">Default</option>
-                               <option value="exoplayer">ExoPlayer</option>
-                           </select>
-                       </div>
+                        <div>
+                            <label for="defaultPlayer">Choose a player:</label>
+                            <select name="defaultPlayer" id="defaultPlayer"
+                                    ng-model="advanced_settings.default_player.value">
+                                <option value="default">Default</option>
+                                <option value="exoplayer">ExoPlayer</option>
+                            </select>
+                        </div>
                         <br>
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <h3><img src="/admin/images/blacklist.png" width="50" height="50">App Versions Blacklist</h3>
+                    <small class="form-text text-muted">{{advanced_settings.client_app.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <label for="vodConfff">Blacklist app versions</label>
+                        <input type="text" class="form-control" id="vodConfff"
+                               ng-model="advanced_settings.client_app.blacklist"
+                               placeholder="Blacklisted app versions" style="letter-spacing: 1px">
+                        <br>
+                    </div>
+                </div>
+
+
+                <div class="form-group">
+                    <h3><img src="/admin/images/auth.png" width="50" height="50"> IP Whitelist</h3>
+                    <br>
+                    <div class="container">
+                        <label for="public_auth">IP Whitelist</label>
+                        <input type="text" class="form-control" id="public_auth" ng-model="advanced_settings.public_api.auth.ip_whitelist" placeholder="IP Whitelist">
+                        <br>
+                    </div>
+                </div>
+
+
+                <div class="form-group">
+                    <h3><img src="/admin/images/gcs.jpg" width="50" height="50">Google Cloud Storage</h3>
+                    <small class="form-text text-muted">{{advanced_settings.google_cloud.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <input type="checkbox" class="form-control" id="bucketId"
+                               ng-model="advanced_settings.google_cloud.storage"
+                               placeholder="Google Cloud Storage">
+                        <br>
+                        <label for="managedId">Google Managed Key</label>
+                        <input type="text" class="form-control" id="managedId"
+                               ng-model="advanced_settings.google_cloud.google_managed_key"
+                               placeholder="Google Managed Key">
+                        <br>
+                        <label for="projectId">Project ID</label>
+                        <input type="text" class="form-control" id="projectId"
+                               ng-model="advanced_settings.google_cloud.projectId"
+                               placeholder="Project ID">
+                        <br>
+                        <label for="bucketName">Bucket Name</label>
+                        <input type="text" class="form-control" id="bucketName"
+                               ng-model="advanced_settings.google_cloud.bucket_name"
+                               placeholder="Bucket Name">
+                        <br>
+                    </div>
+                </div>
+
+
+                <div class="form-group">
+                    <h3>
+                        <img src="/admin/images/vmx.png" width="50" height="50">
+                        Verimatrix </h3>
+                    <small class="form-text text-muted">{{advanced_settings.vmx.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <label for="tenant_id">Tenant ID</label>
+                        <input type="text" class="form-control" id="tenant_id"
+                               ng-model="advanced_settings.vmx.tenant_id"
+                               placeholder="Tenant ID">
+                        <br>
+                        <div class="form-group">
+                            <label for="company_name">Company Name</label>
+                            <input type="text" class="form-control" id="company_name"
+                                   ng-model="advanced_settings.vmx.company_name"
+                                   placeholder="Company Name">
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input type="text" class="form-control" id="username"
+                                   ng-model="advanced_settings.vmx.username"
+                                   placeholder="Username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="text" class="form-control" id="password"
+                                   ng-model="advanced_settings.vmx.password"
+                                   placeholder="Password">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <h3>
+                        <img src="/admin/images/widevine.png" width="50" height="50">
+                        Widevine </h3>
+                    <small class="form-text text-muted">{{advanced_settings.widevine.description}}</small>
+                    <br>
+                    <br>
+                    <div class="container">
+                        <div class="form-group">
+                            <label for="company_name">Key</label>
+                            <input type="text" class="form-control" id="widevine_key"
+                                   ng-model="advanced_settings.widevine.key"
+                                   placeholder="Key">
+                        </div>
+                        <div class="form-group">
+                            <label for="username">IV</label>
+                            <input type="text" class="form-control" id="widevine_iv"
+                                   ng-model="advanced_settings.widevine.iv"
+                                   placeholder="IV">
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Provider</label>
+                            <input type="text" class="form-control" id="widevine_provider"
+                                   ng-model="advanced_settings.widevine.provider"
+                                   placeholder="Provider">
+                        </div>
+                        <div class="form-group">
+                            <label for="username">License Content Key</label>
+                            <input type="text" class="form-control" id="widevine_license_content_key"
+                                   ng-model="advanced_settings.widevine.license_content_key"
+                                   placeholder="License Content Key">
+                        </div>
+                    </div>
+                </div>
 
                 <hr>
                 <button type="submit" class="btn btn-default pull-right">Submit</button>

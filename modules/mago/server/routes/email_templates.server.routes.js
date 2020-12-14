@@ -20,9 +20,9 @@ module.exports = function(app) {
     app.route('/api/emailtemplate/:emailTemplatesId')
         .all(policy.Authenticate)
         .all(policy.isAllowed)
+        .all(emailTemplates.dataByID)
         .get(emailTemplates.read)
         .put(emailTemplates.update)
         .delete(emailTemplates.delete);
 
-    app.param('emailTemplatesId', emailTemplates.dataByID);
 };

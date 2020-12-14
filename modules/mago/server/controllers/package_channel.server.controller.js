@@ -9,7 +9,7 @@ var path = require('path'),
     winston = require('winston'),
     sequelize_t = require(path.resolve('./config/lib/sequelize')),
     DBModel = db.packages_channels;
-
+const { Op } = require('sequelize');
 
 
 //function link_channel_with_packages(channel_id,array_package_ids) {
@@ -20,7 +20,7 @@ function link_channels_with_package(array_channel_ids, package_id, company_id) {
     return DBModel.destroy({
         where: {
             package_id: package_id,
-            channel_id: {$notIn: array_channel_ids},
+            channel_id: {[Op.notIn]: array_channel_ids},
             company_id: company_id
         }
     }).then(function (result) {
@@ -103,7 +103,7 @@ exports.update = function(req, res) {
     var updateData = req.packageChannel;
 
     if(req.packageChannel.company_id === req.token.company_id){
-        updateData.updateAttributes(req.body).then(function(result) {
+        updateData.update(req.body).then(function(result) {
             res.json(result);
         }).catch(function(err) {
             winston.error("Error on updaing package channel at package channel, error: ",err);
@@ -123,7 +123,7 @@ exports.update = function(req, res) {
 exports.delete = function(req, res) {
     var deleteData = req.packageChannel;
 
-    DBModel.findById(deleteData.id).then(function(result) {
+    DBModel.findByPk(deleteData.id).then(function(result) {
         if (result) {
             if (result && (result.company_id === req.token.company_id)) {
                 result.destroy().then(function() {
@@ -194,7 +194,7 @@ exports.dataByID = function(req, res, next, id) {
         return res.status(404).send({ message: 'Data is invalid' });
     }
 
-    DBModel.find({
+    DBModel.findOne({
         where: {
             id: id
         },

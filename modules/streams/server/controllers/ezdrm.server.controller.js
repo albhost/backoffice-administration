@@ -1,9 +1,9 @@
 'use strict'
 
 var path = require('path'),
-    request = require('request'),
     queryString = require('querystring'),
     responses = require(path.resolve("./config/responses.js"));
+const axios = require('axios').default;
 
 exports.authorize = function(req, res) {
     let response = `Play=True
@@ -46,14 +46,12 @@ exports.issueLicense = function(req, res) {
     };
 
     let url = 'http://wvm.ezdrm.com/ws/LicenseInfo.asmx/GenerateKeys?' + queryString.encode(params);
-    request.get({url: url}, function(err, resp, respBody) {
-        if (err) {
-            response.error_description  = err.message;
-            res.status(500).send(response);
-            return;
-        }
 
+    axios.get(url).then((response) => {
         res.type('application/xml');
-        res.send(respBody);
+        res.send(response.data);
+    }).catch(error => {
+        response.error_description  = error;
+        res.status(500).send(response);
     })
 }
