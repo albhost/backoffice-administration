@@ -192,9 +192,10 @@ function uploadFile(req, res, file) {
     const companyID = req.token.company_id;
     let uploadLinkPath;
 
-    const bucketName = req.app.locals.advanced_settings[req.token.company_id].google_cloud.bucket_name;
+  
 
     if (req.app.locals.advanced_settings[req.token.company_id] && req.app.locals.advanced_settings[req.token.company_id].google_cloud.storage === true) {
+        const bucketName = req.app.locals.advanced_settings[req.token.company_id].google_cloud.bucket_name;
         const jsonString = req.app.locals.advanced_settings[req.token.company_id].google_cloud.google_managed_key;
         const exist = fs.existsSync(path.resolve('./google_storage_credentials.json'));
         if (!exist) {
