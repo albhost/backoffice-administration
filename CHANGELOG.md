@@ -1,5 +1,8 @@
 # Changelog
 ## [Unreleased]
+
+
+## [1.5.5] - 15/12/2020
 ### Fixed
 - Fix package deletion issue at channels
 - Fix genre deletion issue at tv series
@@ -9,6 +12,7 @@
 - Fix settings problem with expiration date
 - Fix apiv4 verify user middleware with promises
 - Fix no company condition in public subscription apis
+- etc...
 
 ### Added
 - Add apiv4 endpoints
@@ -19,6 +23,7 @@
 - Unified epg store for home page and channel event
 - Added public api for getting last customer subscription
 - Added api: /apiv2/channels/scheduled
+- etc...
 
 ## [1.0.0] - 25/09/2020
 ### Added
@@ -27,3 +32,4 @@
 
 [Unreleased]: https://bitbucket.org/magoware/magoware-backoffice/branch/develop
 [1.0.0]: https://bitbucket.org/magoware/magoware-backoffice/src/v1.0.0/
+[1.5.5]: https://bitbucket.org/magoware/magoware-backoffice/src/v1.5.5/
