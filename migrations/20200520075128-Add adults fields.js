@@ -1,5 +1,7 @@
 'use strict';
 
+const winston = require("winston");
+
 module.exports = {
   up: (queryInterface, Sequelize) => {
     return Promise.all([
