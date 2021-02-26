@@ -574,7 +574,7 @@ const addDefaultMediaPlayer = async(deviceId, appId, companyId) => {
 
 const checkIfMediaPlayerIsSet = async(deviceId) => {
   try {
-    const result = await models.device_mediaplayer.findOne({ device_id: deviceId});
+    const result = await models.device_mediaplayer.findOne({ where: { device_id: deviceId } });
     return Promise.resolve(result);
   } catch (error) {
     return Promise.reject(error);
