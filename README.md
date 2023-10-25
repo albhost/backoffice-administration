@@ -1,4 +1,4 @@
-![alt tag](https://www.magoware.tv/wp-content/uploads/2016/06/logo.png)
+![alt tag](https://static.wixstatic.com/media/e18fa1_7cba094718934a3fbbe1ddb3c89e8718~mv2.png/v1/fill/w_454,h_73,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/logo-magoware_white.png)
 
 MAGOWARE is an IPTV/OTT solution for Pay Tv Businesses. The administration portal is build on Sequelize, Express, ng-admin, and Node.js
 
